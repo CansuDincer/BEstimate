@@ -1083,7 +1083,7 @@ def main():
         ensembl_obj.extract_info(chromosome=ensembl_obj.chromosome,
                                  loc_start=ensembl_obj.gene_range[1],
                                  loc_end=ensembl_obj.gene_range[0])
-    """
+
     print("\nEntering extract_gRNA_sites function...\n")
     crispr_df, crispr_nuc_df = extract_grna_sites(searched_nucleotide=args["EDIT"],
                                                   pam_window=[int(args["PAMWINDOW"].split("-")[0]),
@@ -1093,13 +1093,13 @@ def main():
                                                   pam_sequence=args["PAMSEQ"],
                                                   protospacer_length=args["PROTOLEN"],
                                                   ensembl_object=ensembl_obj)
-    """
+
     path = ""
     if args["OUTPUT_PATH"][-1] == "/":
         path = args["OUTPUT_PATH"]
     else:
         path = args["OUTPUT_PATH"] + "/"
-    """
+
     if len(crispr_df.index) != 0: print("CRISPR Data Frame Created!")
     crispr_df.to_csv(path + args["OUTPUT_FILE"] + "_crispr_df.csv")
 
@@ -1117,8 +1117,7 @@ def main():
     edit_df.to_csv(path + args["OUTPUT_FILE"] + "_edit_df.csv")
 
     print("\nEDIT Data Frame wrote in %s as %s" % (path, args["OUTPUT_FILE"] + "_edit_df.csv\n\n"))
-    """
-    edit_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_edit_df.csv", index_col = 0)
+    
     if args["PROTEIN"]:
         print("\nExtracting VEP Information...")
 
