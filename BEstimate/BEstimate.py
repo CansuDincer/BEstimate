@@ -1095,6 +1095,13 @@ def extract_pis(pis):
                         sites.append(int(s))
                 else:
                     sites.append(int(s_last))
+            elif site[-1] == "]" and site[0] == "[":
+                s_only = site[1:-1]
+                if len(s_only.split("-")) > 1:
+                    for s in list(range(int(s_only.split("-")[0]), int(s_only.split("-")[1])+1)):
+                        sites.append(int(s))
+                else:
+                    sites.append(int(s_only))
             else:
                 if len(site.split("-")) > 1:
                     for s in list(range(int(site.split("-")[0]), int(site.split("-")[1])+1)):
