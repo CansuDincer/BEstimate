@@ -1,12 +1,16 @@
-###########################################################################################
-##### Find editable nucleotides of a gene from a given PAM sequence with Base Editors #####
-###########################################################################################
+#-----------------------------------------------------------------------------------------#
+#                                                                                         #
+#                                  B E s t i m a t e                                      #
+#                                                                                         #
+#                   Cansu Dincer | Dr Matthew Coelho | Dr Mathew Garnett                  #
+#                              Wellcome Sanger Institute                                  #
+#-----------------------------------------------------------------------------------------#
 
 # Import necessary packages
 import os, pandas, re, argparse, requests
 
 
-###########################################################################################
+#-----------------------------------------------------------------------------------------#
 # Take inputs
 
 
@@ -80,7 +84,7 @@ def take_input():
 args = take_input()
 
 
-###########################################################################################
+#-----------------------------------------------------------------------------------------#
 # Objects from APIs
 
 class Uniprot:
@@ -352,7 +356,13 @@ class Ensembl:
                 return seq_mapping
 
 
-###########################################################################################
+#-----------------------------------------------------------------------------------------#
+# Data w/out API opportunity
+
+yulab = pandas.read_table(os.getcwd() + "/data/H_sapiens_interfaces.txt")
+
+
+#-----------------------------------------------------------------------------------------#
 # Functions
 
 
@@ -884,7 +894,7 @@ def extract_vep_info(hugo_symbol, grna, grna_location, edit_location,
         return vep_request, VEP_df, uniprot_dict
 
 
-def after_vep_analysis(ensembl_object, vep_df):
+def annotate_edits(ensembl_object, vep_df):
     """
     Adding Uniprot API Information on VEP DF
     :param ensembl_object: The object of the Ensembl from Ensembl API
@@ -1065,6 +1075,129 @@ def after_vep_analysis(ensembl_object, vep_df):
         return None
 
 
+def extract_pis(pis):
+    """
+    Curating the protein interaction sites from the YULab data
+    :param pis: Interaction string from YUlab data (row --> P_IRES)
+    :return: List of interacting uniprot indices
+    """
+    sites = list()
+    if pis != "[]":
+        for site in pis.split(","):
+            if site[0] == "[" and site[-1] != "]":
+                s_first = site[1:]
+                if len(s_first.split("-")) > 1:
+                    for s in list(range(int(s_first.split("-")[0]), int(s_first.split("-")[1])+1)):
+                        sites.append(int(s))
+                else:
+                    sites.append(int(s_first))
+            elif site[-1] == "]" and site[0] != "[":
+                s_last = site[:-1]
+                if len(s_last.split("-")) > 1:
+                    for s in list(range(int(s_last.split("-")[0]), int(s_last.split("-")[1])+1)):
+                        sites.append(int(s))
+                else:
+                    sites.append(int(s_last))
+            else:
+                if len(site.split("-")) > 1:
+                    for s in list(range(int(site.split("-")[0]), int(site.split("-")[1])+1)):
+                        sites.append(int(s))
+                else:
+                    sites.append(int(site))
+        sites.sort()
+        return sites
+    else: return None
+
+
+def collect_pis(uniprot):
+    """
+    Collecting protein interaction position for a given uniprot id
+    :param uniprot: Uniprot ID
+    :return: positional dictionary specify the position and their source and partner (PDB/I3D/ECLAIR)
+    """
+    pis_dict = dict()
+    df1 = yulab[yulab.P1 == uniprot]
+    df2 = yulab[yulab.P2 == uniprot]
+
+    if len(df1.index) != 0:
+        for partner, partner_df in df1.groupby(["P2"]):
+            for p_ind, p_row in partner_df.iterrows():
+                source = p_row["Source"]
+                interface_indices = extract_pis(p_row["P1_IRES"])
+                if interface_indices is not None:
+                    for ind in interface_indices:
+                        if ind not in pis_dict.keys():
+                            pis_dict[ind] = [{"partner": partner, "source": source}]
+                        else:
+                            t = pis_dict[ind]
+                            if {"partner": partner, "source": source} not in t:
+                                t.append({"partner": partner, "source": source})
+                            pis_dict[ind] = t
+    if len(df2.index) != 0:
+        for partner, partner_df in df1.groupby(["P1"]):
+            for p_ind, p_row in partner_df.iterrows():
+                source = p_row["Source"]
+                interface_indices = extract_pis(p_row["P2_IRES"])
+                if interface_indices is not None:
+                    for ind in interface_indices:
+                        if ind not in pis_dict.keys():
+                            pis_dict[ind] = [{"partner": partner, "source": source}]
+                        else:
+                            t = pis_dict[ind]
+                            if {"partner": partner, "source": source} not in t:
+                                t.append({"partner": partner, "source": source})
+                            pis_dict[ind] = t
+    return pis_dict
+
+
+def disrupt_interface(uniprot, pos):
+    """
+    Checking if the given position disrupts the interfaces in the given uniprot
+    :param uniprot: Uniprot ID
+    :param pos: Uniprot index
+    :return: True/False, effected PDB partners, effected I3D partners, effected ECLAIR partners
+    """
+    d = collect_pis(uniprot)
+    if pos in d.keys():
+        pdb_partner_list = list()
+        i3d_partner_list = list()
+        eclair_partner_list = list()
+        for k in d[pos]:
+            if k["source"] == "PDB":
+                if k["partner"] not in pdb_partner_list: pdb_partner_list.append(k["partner"])
+            elif k["source"] == "I3D":
+                if k["partner"] not in i3d_partner_list: i3d_partner_list.append(k["partner"])
+            elif k["source"] == "ECLAIR":
+                if k["partner"] not in eclair_partner_list: eclair_partner_list.append(k["partner"])
+        return True, ",".join(pdb_partner_list), ",".join(i3d_partner_list), ",".join(eclair_partner_list)
+    else:
+        return False, None, None, None
+
+
+def annotate_interface(annotated_edit_df):
+    """
+    Add Interactome Insider protein interface information for edgetic perturbation.
+    :param annotated_edit_df: Data frame created with annotate_edits
+    :return: Added interface annotation on edit table
+    """
+    global yulab
+    df = annotated_edit_df.copy()
+    df["is_disruptive_interface"] = None
+    df["disrupted_PDB_int_partners"] = None
+    df["disrupted_I3D_int_partners"] = None
+    df["disrupted_Eclair_int_partners"] = None
+    for group, group_df in df.groupby(["Uniprot", "Protein_Position"]):
+        if group[1] is not None:
+            if group[0] in list(yulab.P1) or group[0] in list(yulab.P2):
+                is_distruptive, pdb_partners, i3d_partners, eclair_partners = disrupt_interface(
+                    uniprot=group[0], pos = int(group[1]))
+                df.at[list(group_df.index), "is_disruptive_interface"] = is_distruptive
+                df.at[list(group_df.index), "disrupted_PDB_int_partners"] = pdb_partners
+                df.at[list(group_df.index), "disrupted_I3D_int_partners"] = i3d_partners
+                df.at[list(group_df.index), "disrupted_Eclair_int_partners"] = eclair_partners
+    return df
+
+
 ###########################################################################################
 # Execution
 
@@ -1168,7 +1301,7 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
         if args["TRANSCRIPT"] != "canonical":
             loc_edit_df = loc_edit_df[loc_edit_df.Transcript_ID == args["TRANSCRIPT"]]
         else:
-            for transcript, trsnacript_dict in ensembl_obj.info_dict.items():
+            for transcript, transcript_dict in ensembl_obj.info_dict.items():
                 if transcript_dict["canonical"]:
                     loc_edit_df = loc_edit_df[loc_edit_df.Transcript_ID == transcript]
 
@@ -1216,7 +1349,7 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
         \n""")
 
         print("Extracting Uniprot Information...")
-        analysis_df = after_vep_analysis(ensembl_object=ensembl_obj, vep_df=whole_vep_df)
+        analysis_df = annotate_edits(ensembl_object=ensembl_obj, vep_df=whole_vep_df)
 
         if analysis_df is not None and len(analysis_df.index) != 0:
             print("\nAnalysis Data Frame Created!")
@@ -1225,7 +1358,20 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
                                                                    "_analysis_df.csv"))
         else:
             print("\nAnalysis Data Frame cannot be created because it is empty.")
+
+        print("Extracting Protein Interface Information...")
+        analysis2_df = annotate_interface(annotated_edit_df= analysis_df)
+
+        if analysis2_df is not None and len(analysis2_df.index) != 0:
+            print("\nAnalysis Data Frame Created!")
+            analysis2_df.to_csv(path + args["OUTPUT_FILE"] + "_analysis2_df.csv")
+            print("\nAnalysis Data Frame wrote in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +
+                                                                   "_analysis2_df.csv"))
+        else:
+            print("\nAnalysis Data Frame cannot be created because it is empty.")
+
         print("************************************************************\n\n")
+
         return True
 
     else:
