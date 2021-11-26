@@ -7,7 +7,7 @@
 #-----------------------------------------------------------------------------------------#
 
 # Import necessary packages
-import os, pandas, re, argparse, requests
+import os, sys, pandas, re, argparse, requests
 
 
 #-----------------------------------------------------------------------------------------#
@@ -171,20 +171,18 @@ class Ensembl:
 
         hugo_ensembl = "/xrefs/symbol/homo_sapiens/%s?" % self.hugo_symbol
 
-        print("Request is done to Ensembl REST API for Ensembl Gene information:")
+        print("Request to Ensembl REST API for Ensembl Gene ID:")
         gene_request = requests.get(self.server + hugo_ensembl,
                                     headers={"Content-Type": "application/json"})
 
         if gene_request.status_code != 200:
             print("No response from ensembl!\n")
-        else:
-            print("Successful response!\n")
 
         for x in gene_request.json():
             if x["id"][:4] == "ENSG": self.gene_id = x["id"]
 
         if self.gene_id != '':
-            print("Corresponding Ensembl Gene ID: %s\n" % self.gene_id)
+            print("Ensembl Gene ID: %s\n" % self.gene_id)
             return 1
         else:
             return 0
@@ -194,7 +192,7 @@ class Ensembl:
         seq_ensembl = self.server + "/sequence/id/%s?" % gene_id
         seq_flan_ensembl = self.server + "/sequence/id/%s?expand_3prime=23;expand_5prime=23" % gene_id
 
-        print("Request is done to Ensembl REST API for sequence information:")
+        print("Request to Ensembl REST API for sequence information:")
         seq_request = requests.get(seq_ensembl,
                                    headers={"Content-Type": "text/x-fasta"})
         seq_flan_request = requests.get(seq_flan_ensembl,
@@ -202,8 +200,6 @@ class Ensembl:
 
         if seq_request.status_code != 200 and seq_flan_request.status_code != 200:
             print("No response from ensembl sequence!\n")
-        else:
-            print("Successful response!\n")
 
         # Sequence
         label_line = seq_request.text.split("\n")[0]
@@ -359,7 +355,7 @@ class Ensembl:
 #-----------------------------------------------------------------------------------------#
 # Data w/out API opportunity
 
-yulab = pandas.read_table(os.getcwd() + "/data/H_sapiens_interfaces.txt")
+yulab = pandas.read_table(os.getcwd() + "/../data/H_sapiens_interfaces.txt")
 
 
 #-----------------------------------------------------------------------------------------#
@@ -493,7 +489,7 @@ def extract_grna_sites(hugo_symbol, pam_sequence, searched_nucleotide,
                                          protospacer_length=protospacer_length)
 
     # Left CRISPRs: raw sequence will be used
-    print("Protospacer and PAM regions are searching for left direction...")
+    print("\nProtospacer and PAM regions are searching for left direction...")
     left_crisprs = find_pam_protospacer(sequence=left_sequence,
                                         pam_sequence=pam_sequence,
                                         searched_nucleotide=searched_nucleotide,
@@ -503,7 +499,7 @@ def extract_grna_sites(hugo_symbol, pam_sequence, searched_nucleotide,
 
     crisprs_dict = {"left": left_crisprs, "right": right_crisprs}
 
-    print("CRISPR df is filling...")
+    print("\nCRISPR df is filling...")
 
     crisprs_df = pandas.DataFrame(columns=["Hugo Symbol", "CRISPR+PAM Sequence", "gRNA Target Sequence",
                                            "Location", "Direction", "Gene_ID", "Transcript_ID", "Exon_ID"])
@@ -569,7 +565,7 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 
     activity_window = [activity_window[0] - 1, activity_window[1]]
 
-    print("EDIT df is filling...")
+    print("Edit df is filling...")
     edit_df = pandas.DataFrame(columns=["Hugo Symbol", "CRISPR+PAM Sequence", "gRNA Target Sequence", "Location",
                                         "Edit Location", "Direction", "Gene ID", "Transcript_ID", "Exon_ID",
                                         "Edit_in_Exon"])
@@ -1208,9 +1204,11 @@ def main():
     :return:
     """
     print("""
----------------------------------------------------------------------------------------------------
-                                          BEstimate                                                
----------------------------------------------------------------------------------------------------
+------------------------------------------------------                                                                                         
+                B E s t i m a t e                                      
+               
+            Wellcome Sanger Institute                                  
+------------------------------------------------------
     """)
     if args["PROTEIN"]: protein = True
     else: protein = False
@@ -1222,9 +1220,9 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
              args["ACTWINDOW"], args["EDIT"], args["EDIT_TO"], protein))
 
     print("""\n
----------------------------------------------------------------------------------------------------
-                            Retrieval of the Ensembl Gene Information
----------------------------------------------------------------------------------------------------
+------------------------------------------------------ 
+              Ensembl Gene Information
+------------------------------------------------------ 
     \n""")
 
     ensembl_obj = Ensembl(hugo_symbol=args["GENE"], assembly=args["ASSEMBLY"])
@@ -1244,9 +1242,9 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
                                  loc_end=ensembl_obj.gene_range[0])
 
     print("""\n
----------------------------------------------------------------------------------------------------
-                            Construction of the CRISPR Data Frame
----------------------------------------------------------------------------------------------------
+------------------------------------------------------
+                gRNAs - Targetable Sites
+------------------------------------------------------
     \n""")
 
     crispr_df = extract_grna_sites(hugo_symbol=args["GENE"], searched_nucleotide=args["EDIT"],
@@ -1260,37 +1258,35 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
     else:
         path = args["OUTPUT_PATH"] + "/"
 
-    if len(crispr_df.index) != 0: print("\nCRISPR Data Frame Created!")
+    if len(crispr_df.index) != 0: print("CRISPR Data Frame was created!")
     crispr_df.to_csv(path + args["OUTPUT_FILE"] + "_crispr_df.csv")
 
     print("CRISPR Data Frame was written in %s as %s\n" % (path, args["OUTPUT_FILE"] + "_crispr_df.csv"))
 
     print("""\n
----------------------------------------------------------------------------------------------------
-                         Adding the editability information of the gRNAs
----------------------------------------------------------------------------------------------------
+------------------------------------------------------
+               gRNAs - Editable Sites
+------------------------------------------------------
     \n""")
 
-    print("Entering find_editable_nucleotide function...\n")
     edit_df = find_editable_nucleotide(crispr_df=crispr_df, searched_nucleotide=args["EDIT"],
                                        activity_window=[int(args["ACTWINDOW"].split("-")[0]),
                                                         int(args["ACTWINDOW"].split("-")[1])],
                                        ensembl_object=ensembl_obj)
 
-    if len(edit_df.index) != 0: print("EDIT Data Frame Created!")
+    if len(edit_df.index) != 0: print("Edit Data Frame was created!")
 
     edit_df.to_csv(path + args["OUTPUT_FILE"] + "_edit_df.csv")
 
-    print("EDIT Data Frame wrote in %s as %s" % (path, args["OUTPUT_FILE"] + "_edit_df.csv\n"))
+    print("Edit Data Frame was written in %s as %s" % (path, args["OUTPUT_FILE"] + "_edit_df.csv\n"))
 
     if args["PROTEIN"]:
         print("""\n
----------------------------------------------------------------------------------------------------
-                             Annotating the possible edit with VEP
----------------------------------------------------------------------------------------------------
+------------------------------------------------------
+               Edits - VEP Annotation
+------------------------------------------------------
         \n""")
 
-        print("Extracting VEP Information...")
 
         loc_edit_df = edit_df[["Edit Location", "Direction", "gRNA Target Sequence",
                                "Location", "Transcript_ID", "Exon_ID"]]
@@ -1334,43 +1330,54 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 
             if len(vep_df.index) != 0:
                 whole_vep_df = pandas.concat([whole_vep_df, vep_df])
-
+        """
         if len(whole_vep_df.index) != 0:
-            print("\nVEP Data Frame Created!")
-            whole_vep_df.to_csv(path + args["OUTPUT_FILE"] + "_vep_df.csv")
-            print("\nVEP Data Frame wrote in %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_vep_df.csv"))
+            print("\nVEP Data Frame was created!")
+            #whole_vep_df.to_csv(path + args["OUTPUT_FILE"] + "_vep_df.csv")
+            #print("\nVEP Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_vep_df.csv"))
         else:
             print("\nVEP Data Frame cannot be created because it is empty.")
+        """
 
         print("""\n
----------------------------------------------------------------------------------------------------
-                            Annotating the possible edit with Uniprot
----------------------------------------------------------------------------------------------------
+------------------------------------------------------
+               Edits - Uniprot Annotation
+------------------------------------------------------
         \n""")
 
-        print("Extracting Uniprot Information...")
-        analysis_df = annotate_edits(ensembl_object=ensembl_obj, vep_df=whole_vep_df)
+        if len(whole_vep_df.index) != 0:
+            uniprot_df = annotate_edits(ensembl_object=ensembl_obj, vep_df=whole_vep_df)
+            """
+            if uniprot_df is not None and len(uniprot_df.index) != 0:
+                print("\nUniprot Data Frame was created!")
+                uniprot_df.to_csv(path + args["OUTPUT_FILE"] + "_uniprot_df.csv")
+                print("\nUniprot Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +"_uniprot_df.csv"))
+            else:
+                print("\nUniprot Data Frame cannot be created because it is empty.")
+            """
 
-        if analysis_df is not None and len(analysis_df.index) != 0:
-            print("\nAnalysis Data Frame Created!")
-            analysis_df.to_csv(path + args["OUTPUT_FILE"] + "_analysis_df.csv")
-            print("\nAnalysis Data Frame wrote in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +
-                                                                   "_analysis_df.csv"))
+            print("""\n
+------------------------------------------------------
+           Edits - 3D Interface Annotation
+------------------------------------------------------
+                \n""")
+
+            if uniprot_df is not None and len(uniprot_df.index) != 0:
+                interaction_df = annotate_interface(annotated_edit_df= uniprot_df)
+
+                if interaction_df is not None and len(interaction_df.index) != 0:
+                    print("\nAnnotation Data Frame was created!")
+
+                    interaction_df.to_csv(path + args["OUTPUT_FILE"] + "_annotation_df.csv")
+
+                    print("\nAnnotation Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +
+                                                                                   "_annotation_df.csv"))
+                else:
+                    print("\nAnnotation Data Frame cannot be created because it is empty.")
+            else:
+                print("\nAnnotation Data Frame cannot be created because it is empty.")
         else:
-            print("\nAnalysis Data Frame cannot be created because it is empty.")
-
-        print("Extracting Protein Interface Information...")
-        analysis2_df = annotate_interface(annotated_edit_df= analysis_df)
-
-        if analysis2_df is not None and len(analysis2_df.index) != 0:
-            print("\nAnalysis Data Frame Created!")
-            analysis2_df.to_csv(path + args["OUTPUT_FILE"] + "_analysis2_df.csv")
-            print("\nAnalysis Data Frame wrote in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +
-                                                                   "_analysis2_df.csv"))
-        else:
-            print("\nAnalysis Data Frame cannot be created because it is empty.")
-
-        print("************************************************************\n\n")
+            print("\nAnnotation Data Frame cannot be created because it is empty.")
 
         return True
 
@@ -1381,9 +1388,9 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 main()
 
 print("""\n
----------------------------------------------------------------------------------------------------
-                                The BEstimate analysis finished!
----------------------------------------------------------------------------------------------------
+------------------------------------------------------
+           The BEstimate analysis finished!
+------------------------------------------------------
 \n""")
 
 
