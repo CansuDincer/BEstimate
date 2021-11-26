@@ -1,9 +1,10 @@
 #-----------------------------------------------------------------------------------------#
 #                                                                                         #
 #                                  B E s t i m a t e                                      #
-#                                                                                         #
-#                   Cansu Dincer | Dr Matthew Coelho | Dr Mathew Garnett                  #
+#                        Author : Cansu Dincer cd7@sanger.ac.uk                           #
+#                         Dr Matthew Coelho & Dr Mathew Garnett                           #
 #                              Wellcome Sanger Institute                                  #
+#                                                                                         #
 #-----------------------------------------------------------------------------------------#
 
 # Import necessary packages
