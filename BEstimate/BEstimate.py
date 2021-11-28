@@ -1173,9 +1173,18 @@ def disrupt_interface(uniprot, pos):
                 if k["partner"] not in i3d_partner_list: i3d_partner_list.append(k["partner"])
             elif k["source"] == "ECLAIR":
                 if k["partner"] not in eclair_partner_list: eclair_partner_list.append(k["partner"])
-        return True, ",".join(pdb_partner_list), ",".join(i3d_partner_list), ",".join(eclair_partner_list)
+        if len(pdb_partner_list) == 0:
+            pdb = None
+        else: pdb = ",".join(pdb_partner_list)
+        if len(i3d_partner_list) == 0:
+            i3d = None
+        else: i3d = ",".join(i3d_partner_list)
+        if len(eclair_partner_list) == 0:
+            eclair = None
+        else: eclair = ",".join(eclair_partner_list)
+        return pdb, i3d, eclair
     else:
-        return False, None, None, None
+        return None, None, None
 
 
 def annotate_interface(annotated_edit_df):
@@ -1186,19 +1195,35 @@ def annotate_interface(annotated_edit_df):
     """
     global yulab
     df = annotated_edit_df.copy()
-    df["is_disruptive_interface"] = None
+    df["is_disruptive_interface_EXP"] = None
+    df["is_disruptive_interface_MOD"] = None
+    df["is_disruptive_interface_PRED"] = None
     df["disrupted_PDB_int_partners"] = None
     df["disrupted_I3D_int_partners"] = None
     df["disrupted_Eclair_int_partners"] = None
     for group, group_df in df.groupby(["Uniprot", "Protein_Position"]):
         if group[1] is not None:
             if group[0] in list(yulab.P1) or group[0] in list(yulab.P2):
-                is_distruptive, pdb_partners, i3d_partners, eclair_partners = disrupt_interface(
+                pdb_partners, i3d_partners, eclair_partners = disrupt_interface(
                     uniprot=group[0], pos = int(group[1]))
-                df.at[list(group_df.index), "is_disruptive_interface"] = is_distruptive
-                df.at[list(group_df.index), "disrupted_PDB_int_partners"] = pdb_partners
-                df.at[list(group_df.index), "disrupted_I3D_int_partners"] = i3d_partners
-                df.at[list(group_df.index), "disrupted_Eclair_int_partners"] = eclair_partners
+                if pdb_partners is not None:
+                    df.loc[list(group_df.index), "is_disruptive_interface_EXP"] = True
+                    df.loc[list(group_df.index), "disrupted_PDB_int_partners"] = pdb_partners
+                else:
+                    df.loc[list(group_df.index), "is_disruptive_interface_EXP"] = False
+                    df.loc[list(group_df.index), "disrupted_PDB_int_partners"] = None
+                if i3d_partners is not None:
+                    df.loc[list(group_df.index), "is_disruptive_interface_MOD"] = True
+                    df.loc[list(group_df.index), "disrupted_I3D_int_partners"] = i3d_partners
+                else:
+                    df.loc[list(group_df.index), "is_disruptive_interface_MOD"] = False
+                    df.loc[list(group_df.index), "disrupted_I3D_int_partners"] = None
+                if eclair_partners is not None:
+                    df.loc[list(group_df.index), "is_disruptive_interface_PRED"] = True
+                    df.loc[list(group_df.index), "disrupted_Eclair_int_partners"] = eclair_partners
+                else:
+                    df.loc[list(group_df.index), "is_disruptive_interface_PRED"] = False
+                    df.loc[list(group_df.index), "disrupted_Eclair_int_partners"] = None
     return df
 
 
@@ -1267,7 +1292,7 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
         path = args["OUTPUT_PATH"] + "/"
 
     if len(crispr_df.index) != 0: print("CRISPR Data Frame was created!")
-    crispr_df.to_csv(path + args["OUTPUT_FILE"] + "_crispr_df.csv")
+    crispr_df.to_csv(path + args["OUTPUT_FILE"] + "_crispr_df.csv", index=False)
 
     print("CRISPR Data Frame was written in %s as %s\n" % (path, args["OUTPUT_FILE"] + "_crispr_df.csv"))
 
@@ -1284,7 +1309,7 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 
     if len(edit_df.index) != 0: print("Edit Data Frame was created!")
 
-    edit_df.to_csv(path + args["OUTPUT_FILE"] + "_edit_df.csv")
+    edit_df.to_csv(path + args["OUTPUT_FILE"] + "_edit_df.csv", index=False)
 
     print("Edit Data Frame was written in %s as %s" % (path, args["OUTPUT_FILE"] + "_edit_df.csv\n"))
 
@@ -1323,7 +1348,7 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
                                                  "cadd_phred", "cadd_raw", "lof", "impact", "blosum62",
                                                  "consequence_terms", "is_ClinVar", "clinical_allele",
                                                  "clinical_id", "clinical_significance", "ClinVar"])
-
+        i, total = 0, len(loc_edit_df.index)
         for ind, row in loc_edit_df.iterrows():
 
             api_response, vep_df, uniprots = extract_vep_info(hugo_symbol=args["GENE"],
@@ -1338,6 +1363,8 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 
             if len(vep_df.index) != 0:
                 whole_vep_df = pandas.concat([whole_vep_df, vep_df])
+            i += 1
+            print(i * 100.0/total)
         """
         if len(whole_vep_df.index) != 0:
             print("\nVEP Data Frame was created!")
@@ -1352,6 +1379,8 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
                Edits - Uniprot Annotation
 ------------------------------------------------------
         \n""")
+
+        print("Adding Uniprot ID, corresponding Domain and PTM information..\n")
 
         if len(whole_vep_df.index) != 0:
             uniprot_df = annotate_edits(ensembl_object=ensembl_obj, vep_df=whole_vep_df)
@@ -1371,12 +1400,15 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
                 \n""")
 
             if uniprot_df is not None and len(uniprot_df.index) != 0:
+
+                print("Adding affected interface and interacting partners..\n")
+
                 interaction_df = annotate_interface(annotated_edit_df= uniprot_df)
 
                 if interaction_df is not None and len(interaction_df.index) != 0:
                     print("\nAnnotation Data Frame was created!")
 
-                    interaction_df.to_csv(path + args["OUTPUT_FILE"] + "_annotation_df.csv")
+                    interaction_df.to_csv(path + args["OUTPUT_FILE"] + "_annotation_df.csv", index=False)
 
                     print("\nAnnotation Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +
                                                                                    "_annotation_df.csv"))
