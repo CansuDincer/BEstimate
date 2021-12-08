@@ -136,4 +136,33 @@ BEstimate is the product of Cansu Dincer, Dr Matthew Coelho and Dr Mathew Garnet
 
 For any problems or feedback on BEstimate, you can contact [here](mailto:cd7@sanger.ac.uk).
 
+## Terms and conditions
+
+BEstimate, a Python module that systematically analyses guide RNA (gRNA) 
+targetable sites across given sequences for given Base Editors, and functional 
+and clinical effects of the potential edits on the resulting proteins. 
+
+Copyright (c) 2020-2021 Genome Research Ltd. 
+
+Author: Cansu Dincer <cd7@sanger.ac.uk> 
+
+This program is free software: you can redistribute it and/or modify it under 
+the terms of the GNU General Public License as published by the Free Software 
+Foundation; either version 3 of the License, or (at your option) any later 
+version. 
+
+This program is distributed in the hope that it will be useful, but WITHOUT 
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS 
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more 
+details. 
+
+You should have received a copy of the GNU General Public License along with 
+this program. If not, see <http://www.gnu.org/licenses/>. 
+
+## Further Disclaimer
+
+For policies regarding the underlying data, please also refer to:
+
+[Interactome Insider terms and conditions](http://interactomeinsider.yulab.org/)
+
 
