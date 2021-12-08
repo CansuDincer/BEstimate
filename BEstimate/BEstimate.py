@@ -1376,7 +1376,8 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
             if len(vep_df.index) != 0:
                 whole_vep_df = pandas.concat([whole_vep_df, vep_df])
             i += 1
-            print(i * 100.0/total)
+            if i * 100.0/total % 10 is False:
+                print(i * 100.0/total)
         """
         if len(whole_vep_df.index) != 0:
             print("\nVEP Data Frame was created!")
