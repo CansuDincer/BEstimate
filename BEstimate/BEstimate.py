@@ -898,7 +898,7 @@ def extract_vep_info(hugo_symbol, grna, grna_location, edit_location,
                              "is_synonymous", "is_stop", "polyphen_score", "polyphen_prediction",
                              "sift_score", "sift_prediction", "cadd_phred", "cadd_raw", "lof",
                              "impact", "blosum62", "consequence_terms", "is_ClinVar", "clinical_allele",
-                             "clinical_id", "clinical_significance", "ClinVar"]]
+                             "clinical_id", "clinical_significance"]]
 
         return vep_request, VEP_df, uniprot_dict
 
@@ -921,7 +921,7 @@ def annotate_edits(ensembl_object, vep_df):
                                             "polyphen_prediction", "sift_score", "sift_prediction",
                                             "cadd_phred", "cadd_raw", "lof", "impact", "blosum62",
                                             "consequence_terms", "is_ClinVar", "clinical_allele",
-                                            "clinical_id", "clinical_significance", "ClinVar",
+                                            "clinical_id", "clinical_significance",
                                             "Domain", "Phosphorylation", "Uniprot", "Reviewed"])
     analysis_dfs = list()
     ensembl_seq_mapping = {}
@@ -995,8 +995,7 @@ def annotate_edits(ensembl_object, vep_df):
                                                         row["blosum62"], row["consequence_terms"],
                                                         row["is_ClinVar"], row["clinical_allele"],
                                                         row["clinical_id"], row["clinical_significance"],
-                                                        row["ClinVar"], dom, phos, u,
-                                                        uniprot_object.reviewed]],
+                                                        dom, phos, u, uniprot_object.reviewed]],
                                                       columns=["hugo_symbol", "gRNA_target_sequence", "gRNA_target_location",
                                                                "Genomic_Position", "Direction", "Transcrip_ID", "Exon_ID",
                                                                "cDNA_Change", "Edited_codon", "New_codon",
@@ -1006,7 +1005,7 @@ def annotate_edits(ensembl_object, vep_df):
                                                                "polyphen_prediction", "sift_score", "sift_prediction",
                                                                "cadd_phred", "cadd_raw", "lof", "impact", "blosum62",
                                                                "consequence_terms", "is_ClinVar", "clinical_allele",
-                                                               "clinical_id", "clinical_significance", "ClinVar",
+                                                               "clinical_id", "clinical_significance",
                                                                "Domain", "Phosphorylation", "Uniprot", "Reviewed"])
                                 analysis_dfs.append(df)
 
@@ -1029,8 +1028,7 @@ def annotate_edits(ensembl_object, vep_df):
                                                     row["blosum62"], row["consequence_terms"],
                                                     row["is_ClinVar"], row["clinical_allele"],
                                                     row["clinical_id"], row["clinical_significance"],
-                                                    row["ClinVar"], dom, phos, u,
-                                                    uniprot_object.reviewed]],
+                                                    dom, phos, u, uniprot_object.reviewed]],
                                                   columns=["hugo_symbol", "gRNA_target_sequence", "gRNA_target_location",
                                                            "Genomic_Position", "Direction", "Transcrip_ID", "Exon_ID",
                                                            "cDNA_Change", "Edited_codon", "New_codon",
@@ -1040,7 +1038,7 @@ def annotate_edits(ensembl_object, vep_df):
                                                            "polyphen_prediction", "sift_score", "sift_prediction",
                                                            "cadd_phred", "cadd_raw", "lof", "impact", "blosum62",
                                                            "consequence_terms", "is_ClinVar", "clinical_allele",
-                                                           "clinical_id", "clinical_significance", "ClinVar",
+                                                           "clinical_id", "clinical_significance",
                                                            "Domain", "Phosphorylation", "Uniprot", "Reviewed"])
                             analysis_dfs.append(df)
 
@@ -1062,8 +1060,7 @@ def annotate_edits(ensembl_object, vep_df):
                                                 row["blosum62"], row["consequence_terms"],
                                                 row["is_ClinVar"], row["clinical_allele"],
                                                 row["clinical_id"], row["clinical_significance"],
-                                                row["ClinVar"], dom, phos, u,
-                                                uniprot_object.reviewed]],
+                                                dom, phos, u, uniprot_object.reviewed]],
                                               columns=["hugo_symbol", "gRNA_target_sequence", "gRNA_target_location",
                                                        "Genomic_Position", "Direction", "Transcrip_ID", "Exon_ID",
                                                        "cDNA_Change", "Edited_codon", "New_codon",
@@ -1073,7 +1070,7 @@ def annotate_edits(ensembl_object, vep_df):
                                                        "polyphen_prediction", "sift_score", "sift_prediction",
                                                        "cadd_phred", "cadd_raw", "lof", "impact", "blosum62",
                                                        "consequence_terms", "is_ClinVar", "clinical_allele",
-                                                       "clinical_id", "clinical_significance", "ClinVar",
+                                                       "clinical_id", "clinical_significance",
                                                        "Domain", "Phosphorylation", "Uniprot", "Reviewed"])
                         analysis_dfs.append(df)
 
@@ -1359,7 +1356,7 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
                                                  "polyphen_prediction", "sift_score", "sift_prediction",
                                                  "cadd_phred", "cadd_raw", "lof", "impact", "blosum62",
                                                  "consequence_terms", "is_ClinVar", "clinical_allele",
-                                                 "clinical_id", "clinical_significance", "ClinVar"])
+                                                 "clinical_id", "clinical_significance"])
         i, total = 0, len(loc_edit_df.index)
         for ind, row in loc_edit_df.iterrows():
 
