@@ -186,8 +186,11 @@ class Ensembl:
                                            headers={"Content-Type": "text/x-fasta"})
                 chr = seq_request.text.split("\n")[0].split(":")[2].strip()
                 try:
-                    int(chr)
-                    self.gene_id = x["id"]
+                    if chr != "X" and chr != "Y":
+                        int(chr)
+                        self.gene_id = x["id"]
+                    elif chr == "X" or chr == "Y":
+                        self.gene_id = x["id"]
                 except ValueError:
                     print(" ")
 
