@@ -180,7 +180,16 @@ class Ensembl:
             print("No response from ensembl!\n")
 
         for x in gene_request.json():
-            if x["id"][:4] == "ENSG": self.gene_id = x["id"]
+            if x["id"][:4] == "ENSG":
+                seq_ensembl = self.server + "/sequence/id/%s?" % x["id"]
+                seq_request = requests.get(seq_ensembl,
+                                           headers={"Content-Type": "text/x-fasta"})
+                chr = seq_request.text.split("\n")[0].split(":")[2].strip()
+                try:
+                    int(chr)
+                    self.gene_id = x["id"]
+                except ValueError:
+                    print(" ")
 
         if self.gene_id != '':
             print("Ensembl Gene ID: %s\n" % self.gene_id)
