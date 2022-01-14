@@ -365,6 +365,32 @@ class Ensembl:
                 return seq_mapping
 
 
+class SangerGenes:
+    def __init__(self, hugo_symbol):
+        gene_server = "https://api.cellmodelpassports.sanger.ac.uk/genes?page[size]=50000"
+        self.sanger_id = None
+
+class CellModelPassport:
+
+    def __init__(self, sanger_id):
+        self.server = "https://api.cellmodelpassports.sanger.ac.uk/" \
+                      "models/%s/datasets/mutations?page[size]=0" % sanger_id
+
+        self.mutations = pandas.DataFrame()
+
+    def extract_gene_id(self):
+
+        request = requests.get(self.server,headers={"Content-Type": "application/json"})
+
+        if request.status_code != 200:
+            print("No response from Cell Model Passport!\n")
+
+        for x in request.json()["data"]:
+            x["attributes"]
+
+
+
+
 #-----------------------------------------------------------------------------------------#
 # Data w/out API opportunity
 
