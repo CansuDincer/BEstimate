@@ -700,10 +700,10 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 	for direction, direction_df in loc_edit_df.groupby(["Direction"]):
 		if direction == "left":
 			# Base reversion of the (-) direction crisprs
-			edited_nucleotide, new_nucleotide = \
+			rev_edited_nucleotide, rev_new_nucleotide = \
 				nucleotide_dict[edited_nucleotide],nucleotide_dict[new_nucleotide]
 
-			for grna, grna_df in loc_edit_df.groupby(["gRNA_Target_Sequence"]):
+			for grna, grna_df in direction_df.groupby(["gRNA_Target_Sequence"]):
 
 				total_edit = len(set(list(grna_df["Edit_Location"].values)))
 
@@ -712,15 +712,15 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 				for edit_loc, grna_edit_df in grna_df.groupby(["Edit_Location"]):
 
 					individual_hgvs = "%s:g.%s%s>%s" \
-									  % (str(chromosome), str(edit_loc), edited_nucleotide, new_nucleotide)
+									  % (str(chromosome), str(edit_loc), rev_edited_nucleotide, rev_new_nucleotide)
 
 					d = {"Hugo_Symbol": list(grna_edit_df["Hugo_Symbol"].values)[0], "Edit_Type": "individual",
 						 "CRISPR_PAM_Sequence": grna_edit_df["CRISPR_PAM_Sequence"].values[0],
 						 "CRISPR_PAM_Location": grna_edit_df["Location"].values[0],
 						 "gRNA_Target_Sequence": grna,
 						 "gRNA_Target_Location": grna_edit_df["Location"].values[0].split(":")[0] + ":" +
-												 grna_edit_df["Location"].values[0].split(":")[1].split("-")[0] + "-" + \
-												 str(int(grna_edit_df["Location"].values[0].split(":")[1].split("-")[1]) - 3),
+												 str(int(grna_edit_df["Location"].values[0].split(":")[1].split("-")[0])-3) + "-" +
+												 grna_edit_df["Location"].values[0].split(":")[1].split("-")[1],
 						 "Total_Edit": total_edit, "Edit_Location" : edit_loc,
 						 "Direction" : direction,
 						 "Transcript_ID": grna_edit_df["Transcript_ID"].values[0],
@@ -739,7 +739,7 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 
 					activity_sites = grna[activity_window[0]: activity_window[1]]
 					activity_sites = "".join([nucleotide_dict[n] for n in activity_sites[::-1]])
-					edited_activity_sites = activity_sites.replace(edited_nucleotide, new_nucleotide)
+					edited_activity_sites = activity_sites.replace(rev_edited_nucleotide, rev_new_nucleotide)
 					multiple_hgvs = "%s:g.%sdelins%s" % (str(chromosome), position, edited_activity_sites)
 
 					d = {"Hugo_Symbol": list(grna_edit_df["Hugo_Symbol"].values)[0], "Edit_Type": "multiple",
@@ -747,8 +747,8 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 						 "CRISPR_PAM_Location": grna_edit_df["Location"].values[0],
 						 "gRNA_Target_Sequence": grna,
 						 "gRNA_Target_Location": grna_edit_df["Location"].values[0].split(":")[0] + ":" +
-												 grna_edit_df["Location"].values[0].split(":")[1].split("-")[0] + "-" + \
-												 str(int(grna_edit_df["Location"].values[0].split(":")[1].split("-")[1]) - 3),
+												 str(int(grna_edit_df["Location"].values[0].split(":")[1].split("-")[0]) -3) + "-" +
+												 grna_edit_df["Location"].values[0].split(":")[1].split("-")[1],
 						 "Total_Edit": total_edit, "Edit_Location": position.split("_")[0] + "-" + position.split("_")[1],
 						 "Direction": direction,
 						 "Transcript_ID": grna_edit_df["Transcript_ID"].values[0],
@@ -757,7 +757,7 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 
 		elif direction == "right":
 
-			for grna, grna_df in loc_edit_df.groupby(["gRNA_Target_Sequence"]):
+			for grna, grna_df in direction_df.groupby(["gRNA_Target_Sequence"]):
 
 				total_edit = len(set(list(grna_df["Edit_Location"].values)))
 
@@ -845,10 +845,10 @@ def retrieve_vep_info(hgvs_df, ensembl_object):
 		if vep_request.status_code != 200:
 			print("No response from VEP for %s" % row.HGVS)
 			na_df = pandas.DataFrame(
-				[row.Hugo_Symbol, row.CRISPR_PAM_Sequence, row.CRISPR_PAM_Location, row.gRNA_Target_Sequence,
+				[[row.Hugo_Symbol, row.CRISPR_PAM_Sequence, row.CRISPR_PAM_Location, row.gRNA_Target_Sequence,
 				 row.gRNA_Target_Location, row.Edit_Location, row.Direction, row.Transcript_ID, None,
 				 row.Exon_ID, None, None, None, None, None, None, None, None, None, None, None, None,
-				 None, None, None, None, None, None, None, None, None, None, None, None, None, None],
+				 None, None, None, None, None, None, None, None, None, None, None, None, None, None]],
 				columns = ["Hugo_Symbol", "CRISPR_PAM_Sequence", "CRISPR_PAM_Location", "gRNA_Target_Sequence",
 						   "gRNA_Target_Location", "Edit_Position", "Direction", "Transcript_ID",
 						   "HGVSC_Transcript_ID", "Exon_ID", "cDNA_Change", "Edited_Codon", "New_Codon",
