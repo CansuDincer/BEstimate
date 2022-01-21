@@ -1013,6 +1013,9 @@ def retrieve_vep_info(hgvs_df, ensembl_object):
 
 				VEP_df["is_ClinVar"] = VEP_df.apply(
 					lambda x: True if x.ClinVar is not None else False, axis=1)
+				VEP_df["consequence_terms"] = VEP_df.apply(
+					lambda x: ",".join(x.consequence_terms) if type(x.consequence_terms) == list
+					else x.consequence_terms,axis=1)
 
 				VEP_df = VEP_df[["Hugo_Symbol", "CRISPR_PAM_Sequence", "CRISPR_PAM_Location",
 								 "gRNA_Target_Sequence", "gRNA_Target_Location",
@@ -1095,55 +1098,36 @@ def annotate_edits(ensembl_object, vep_df):
 
 				for uniprot, dom_ptm in uniprot_info_dict.items():
 					uniprot_object = Uniprot(uniprotid=uniprot)
+					reviewed = uniprot_object.reviewed
 					if dom_ptm is not None:
 						dom = dom_ptm["domain"]
 						ptm = ",".join([l for i,l in dom_ptm.items() if i != "domain" and l is not None])
 					else:
 						dom, ptm = None, None
 
-					df = pandas.DataFrame(
-						[row["Hugo_Symbol"], row["CRISPR_PAM_Sequence"], row["CRISPR_PAM_Location"],
-						 row["gRNA_Target_Sequence"],row["gRNA_Target_Location"],row["Edit_Position"],
-						 row["Direction"], row["Transcript_ID"], row["Exon_ID"], row["cDNA_Change"],
-						 row["Edited_Codon"], row["New_Codon"], row["Protein_ID"], row["Protein_Position"],
-						 row["Protein_Change"], row["Edited_AA"], row["Edited_AA_Prop"], row["New_AA"],
-						 row["New_AA_Prop"], row["is_Synonymous"], row["is_Stop"], row["Polyphen_Score"],
-						 row["Polyphen_Prediction"], row["Sift_Score"], row["Sift_Prediction"],
-						 row["Cadd_Phred"], row["Cadd_Raw"], row["LoF"], row["Impact"], row["Blosum62"],
-						 row["Consequence_Terms"], row["is_ClinVar"], row["Clinical_Allele"],
-						 row["Clinical_ID"], row["Clinical_Significance"], dom, ptm, uniprot,
-						 uniprot_object.reviewed],
-						columns=["Hugo_Symbol", "CRISPR_PAM_Sequence", "CRISPR_PAM_Location",
-								 "gRNA_Target_Sequence", "gRNA_Target_Location", "Edit_Position",
-								 "Direction", "Transcript_ID", "Exon_ID", "cDNA_Change", "Edited_Codon",
-								 "New_Codon", "Protein_ID", "Protein_Position", "Protein_Change",
-								 "Edited_AA", "Edited_AA_Prop", "New_AA", "New_AA_Prop", "is_Synonymous",
-								 "is_Stop", "Polyphen_Score", "Polyphen_Prediction", "Sift_Score",
-								 "Sift_Prediction", "Cadd_Phred", "Cadd_Raw", "LoF", "Impact", "Blosum62",
-								 "Consequence_Terms", "is_ClinVar", "Clinical_Allele", "Clinical_ID",
-								 "Clinical_Significance", "Domain", "TPM", "Uniprot", "Reviewed"])
 			else:
-				df = pandas.DataFrame(
-					[row["Hugo_Symbol"], row["CRISPR_PAM_Sequence"], row["CRISPR_PAM_Location"],
-					 row["gRNA_Target_Sequence"], row["gRNA_Target_Location"], row["Edit_Position"],
-					 row["Direction"], row["Transcript_ID"], row["Exon_ID"], row["cDNA_Change"],
-					 row["Edited_Codon"], row["New_Codon"], row["Protein_ID"], row["Protein_Position"],
-					 row["Protein_Change"], row["Edited_AA"], row["Edited_AA_Prop"], row["New_AA"],
-					 row["New_AA_Prop"], row["is_Synonymous"], row["is_Stop"], row["Polyphen_Score"],
-					 row["Polyphen_Prediction"], row["Sift_Score"], row["Sift_Prediction"],
-					 row["Cadd_Phred"], row["Cadd_Raw"], row["LoF"], row["Impact"], row["Blosum62"],
-					 row["Consequence_Terms"], row["is_ClinVar"], row["Clinical_Allele"],
-					 row["Clinical_ID"], row["Clinical_Significance"], None, None, None, None],
-					columns=["Hugo_Symbol", "CRISPR_PAM_Sequence", "CRISPR_PAM_Location",
-							 "gRNA_Target_Sequence", "gRNA_Target_Location", "Edit_Position",
-							 "Direction", "Transcript_ID", "Exon_ID", "cDNA_Change", "Edited_Codon",
-							 "New_Codon", "Protein_ID", "Protein_Position", "Protein_Change",
-							 "Edited_AA", "Edited_AA_Prop", "New_AA", "New_AA_Prop", "is_Synonymous",
-							 "is_Stop", "Polyphen_Score", "Polyphen_Prediction", "Sift_Score",
-							 "Sift_Prediction", "Cadd_Phred", "Cadd_Raw", "LoF", "Impact", "Blosum62",
-							 "Consequence_Terms", "is_ClinVar", "Clinical_Allele", "Clinical_ID",
-							 "Clinical_Significance", "Domain", "TPM", "Uniprot", "Reviewed"])
+				dom, ptm, uniprot, reviewed = None, None, None, None
 
+			df_d = {"Hugo_Symbol": row["Hugo_Symbol"], "CRISPR_PAM_Sequence": row["CRISPR_PAM_Sequence"],
+					"CRISPR_PAM_Location": row["CRISPR_PAM_Location"],
+					"gRNA_Target_Sequence": row["gRNA_Target_Sequence"],
+					"gRNA_Target_Location": row["gRNA_Target_Location"], "Edit_Position": row["Edit_Position"],
+					"Direction": row["Direction"], "Transcript_ID": row["Transcript_ID"], "Exon_ID": row["Exon_ID"],
+					"cDNA_Change": row["cDNA_Change"], "Edited_Codon": row["Edited_Codon"],
+					"New_Codon": row["New_Codon"], "Protein_ID": row["Protein_ID"],
+					"Protein_Position": row["Protein_Position"], "Protein_Change": row["Protein_Change"],
+					"Edited_AA": row["Edited_AA"], "Edited_AA_Prop": row["Edited_AA_Prop"],
+					"New_AA": row["New_AA"], "New_AA_Prop": row["New_AA_Prop"], "is_Synonymous": row["is_Synonymous"],
+					"is_Stop": row["is_Stop"], "polyphen_score": row["polyphen_score"],
+					"polyphen_prediction": row["polyphen_prediction"], "sift_score": row["sift_score"],
+					"sift_prediction": row["sift_prediction"], "cadd_phred": row["cadd_phred"],
+					"cadd_raw": row["cadd_raw"], "lof": row["lof"], "impact": row["impact"],
+					"blosum62": row["blosum62"],
+					"consequence_terms": row["consequence_terms"], "is_ClinVar": row["is_ClinVar"],
+					"clinical_allele": row["clinical_allele"], "clinical_id": row["clinical_id"],
+					"clinical_significance": row["clinical_significance"], "Domain": dom, "PTM": ptm,
+					"Uniprot": uniprot, "Reviewed": reviewed}
+			df = pandas.DataFrame(df_d)
 			analysis_dfs.append(df)
 
 	if analysis_dfs:
