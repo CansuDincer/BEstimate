@@ -36,7 +36,7 @@ def take_input():
 	parser.add_argument("-assembly", dest="ASSEMBLY", required=True,
 						help="The genome assembly that will be used!")
 
-	parser.add_argument("-transcript", dest="TRANSCRIPT", default="canonical",
+	parser.add_argument("-transcript", dest="TRANSCRIPT", default=None,
 						help="The interested ensembl transcript id")
 
 	# PAM AND PROTOSPACER INFORMATION
@@ -271,9 +271,9 @@ class Ensembl:
 			self.flan_right_sequence_analysis = "".join(
 				[nucleotide_dict[n] for n in self.flan_left_sequence_analysis[::-1]])
 
-	def extract_info(self, chromosome, loc_start, loc_end):
+	def extract_info(self, chromosome, loc_start, loc_end, transcript = None):
 
-		ensembl = "/overlap/region/human/%s:%s-%s?feature=transcript;feature=exon" % (
+		ensembl = "/overlap/region/human/%s:%s-%s?feature=transcript;feature=exon;feature=mane;feature=cds" % (
 			chromosome, int(loc_start), int(loc_end))
 
 		request = requests.get(self.server + ensembl, headers={"Content-Type": "application/json"})
@@ -282,28 +282,46 @@ class Ensembl:
 			print("No response from ensembl!")
 		else:
 			for output in request.json():
-				if output["feature_type"] == "transcript" and output["Parent"] == self.gene_id:
-					transcript_info = "/lookup/id/%s?" % output["transcript_id"]
-					transcript_request = requests.get(self.server + transcript_info,
-													  headers={"Content-Type": "application/json"})
-					transcript_output = transcript_request.json()
-					if transcript_output["is_canonical"] == 1:
-						canonical = True
-					else:
-						canonical = False
-					if output["transcript_id"] not in self.info_dict.keys():
-						self.info_dict[output["transcript_id"]] = \
-							[{"start": output["start"], "end": output["end"], "biotype": output["biotype"],
-							  "canonical": canonical}]
+				if transcript is None:
+					# Mane selected canonical transcript
+					if output["feature_type"] == "mane" and output["Parent"] == self.gene_id:
+						if output["id"] not in self.info_dict.keys():
+							self.info_dict[output["id"]] = \
+								[{"start": output["start"], "end": output["end"], "biotype": "Mane",
+								  "canonical": True}]
 
-					else:
-						old_val = self.info_dict[output["transcript_id"]]
-						if {"start": output["start"], "end": output["end"],
-							"biotype": output["biotype"], "canonical": canonical} not in old_val:
-							old_val.append(
-								{"start": output["start"], "end": output["end"],
-								 "biotype": output["biotype"], "canonical": canonical})
-							self.info_dict[output["transcript_id"]] = old_val
+						else:
+							old_val = self.info_dict[output["id"]]
+							if {"start": output["start"], "end": output["end"],
+								"biotype": "Mane", "canonical": True} not in old_val:
+								old_val.append(
+									{"start": output["start"], "end": output["end"],
+									 "biotype": "Mane", "canonical": True})
+								self.info_dict[output["id"]] = old_val
+				else:
+					# Selected transcript
+					if output["feature_type"] == "transcript" and output["Parent"] == self.gene_id:
+						transcript_info = "/lookup/id/%s?expand=1;mane=1" % output["transcript_id"]
+						transcript_request = requests.get(self.server + transcript_info,
+														  headers={"Content-Type": "application/json"})
+						transcript_output = transcript_request.json()
+						if len(transcript_output["MANE"]) != 0:
+							canonical = True
+						else:
+							canonical = False
+						if output["transcript_id"] not in self.info_dict.keys():
+							self.info_dict[output["transcript_id"]] = \
+								[{"start": output["start"], "end": output["end"], "biotype": output["biotype"],
+								  "canonical": canonical}]
+
+						else:
+							old_val = self.info_dict[output["transcript_id"]]
+							if {"start": output["start"], "end": output["end"],
+								"biotype": output["biotype"], "canonical": canonical} not in old_val:
+								old_val.append(
+									{"start": output["start"], "end": output["end"],
+									 "biotype": output["biotype"], "canonical": canonical})
+								self.info_dict[output["transcript_id"]] = old_val
 
 			for output in request.json():
 				if output["feature_type"] == "exon" and self.info_dict != {} and \
@@ -314,6 +332,23 @@ class Ensembl:
 						else:
 							if output["exon_id"] not in d["exon"].keys():
 								d["exon"][output["exon_id"]] = {"start": output["start"], "end": output["end"]}
+
+			for output in request.json():
+				if output["feature_type"] == "cds" and self.info_dict != {} and \
+						output["Parent"] in self.info_dict.keys():
+					for d in self.info_dict[output["Parent"]]:
+						coding_pos = list(range(output["start"], output["end"]+1))
+						if "cds" not in d.keys():
+							d["cds"] = {output["protein_id"]: coding_pos}
+						else:
+							if output["protein_id"] not in d["cds"].keys():
+								d["cds"][output["protein_id"]] = coding_pos
+							else:
+								t = d["cds"][output["protein_id"]]
+								for i in coding_pos:
+									if i not in t:
+										t.append(i)
+								d["cds"][output["protein_id"]] = t
 
 		if self.info_dict != {}:
 			return 1
@@ -351,6 +386,23 @@ class Ensembl:
 			return transcripts_exons
 		else:
 			return None
+
+	def check_cds(self, transcript_id, start, end):
+		range_locations = list(range(start, end))
+		if self.info_dict != {}:
+			if transcript_id in self.info_dict.keys():
+				for transcript_dict in self.info_dict[transcript_id]:
+					if "cds" in transcript_dict.keys():
+						for protein, protein_pos in transcript_dict["cds"].items():
+							for loc in range_locations:
+								if loc in protein_pos:
+									in_cds = True
+									return in_cds
+					else: in_cds = False
+			else: in_cds = False
+		else: in_cds = False
+
+		return in_cds
 
 	def extract_uniprot_info(self, ensembl_pid):
 
@@ -587,7 +639,7 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 	:param crispr_df: A data frame having sequence, location and direction information of
 	the CRISPRs from extract_crisprs().
 	:param searched_nucleotide: The interested nucleotide which will be changed with BE
-	:param activity_window: The location of the activity windiw on the protospacer sequence.
+	:param activity_window: The location of the activity window on the protospacer sequence.
 	:param ensembl_object: The Ensembl Object created with Ensembl().
 	:return edit_df: A data frame having sequence, edit_location, location and direction
 	information of the CRISPRs.
@@ -603,10 +655,17 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 
 	print("Edit df is filling...")
 	edit_df = pandas.DataFrame(columns=["Hugo_Symbol", "CRISPR_PAM_Sequence", "gRNA_Target_Sequence", "Location",
-										"Edit_Location", "Direction", "Gene_ID", "Transcript_ID", "Exon_ID",
-										"Edit_in_Exon"])
+										"Edit_Location", "Direction", "Strand", "Gene_ID", "Transcript_ID", "Exon_ID",
+										"Guide_in_CDS", "Edit_in_Exon", "Edit_in_CDS"])
 
 	for ind, row in crispr_df.iterrows():
+
+		loc1, loc2 = int(row["Location"].split(":")[1].split("-")[0]), int(row["Location"].split(":")[1].split("-")[1])
+		if loc1 < loc2:
+			guide_in_cds = ensembl_object.check_cds(row["Transcript_ID"], loc1, loc2 + 1)
+		else:
+			guide_in_cds = ensembl_object.check_cds(row["Transcript_ID"], loc2, loc1 + 1)
+
 		# Check only with the sequence having PAM since it only has the searched nucleotide!
 		searched_ind = [nuc_ind for nuc_ind in range(0, len(row["gRNA_Target_Sequence"]))
 						if nuc_ind in list(range(activity_window[0], activity_window[1])) and
@@ -637,13 +696,16 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 				else:
 					edit_in_exon = False
 
+				edit_in_cds = ensembl_object.check_cds(row["Transcript_ID"], actual_ind, actual_ind + 1)
+
 				df = pandas.DataFrame([[row["Hugo_Symbol"], row["CRISPR_PAM_Sequence"],
 										row["gRNA_Target_Sequence"], row["Location"], actual_ind,
 										row["Direction"], ensembl_object.gene_id, row["Transcript_ID"],
-										row["Exon_ID"], edit_in_exon]],
+										row["Exon_ID"], guide_in_cds, edit_in_exon, edit_in_cds]],
 									  columns=["Hugo_Symbol", "CRISPR_PAM_Sequence", "gRNA_Target_Sequence",
 											   "Location", "Edit_Location", "Direction",
-											   "Gene_ID", "Transcript_ID", "Exon_ID", "Edit_in_Exon"])
+											   "Gene_ID", "Transcript_ID", "Exon_ID", "Guide_in_CDS",
+											   "Edit_in_Exon", "Edit_in_CDS"])
 				edit_df = pandas.concat([edit_df, df])
 
 		else:
@@ -651,10 +713,10 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 			df = pandas.DataFrame([[row["Hugo_Symbol"], row["CRISPR_PAM_Sequence"],
 									row["gRNA_Target_Sequence"], row["Location"], "No edit",
 									row["Direction"], ensembl_object.gene_id, row["Transcript_ID"],
-									row["Exon_ID"], False]],
+									row["Exon_ID"], guide_in_cds, False, False]],
 								  columns=["Hugo_Symbol", "CRISPR_PAM_Sequence", "gRNA_Target_Sequence",
 										   "Location", "Edit_Location", "Direction", "Gene_ID",
-										   "Transcript_ID", "Exon_ID", "Edit_in_Exon"])
+										   "Transcript_ID", "Exon_ID", "Guide_in_CDS", "Edit_in_Exon", "Edit_in_CDS"])
 			edit_df = pandas.concat([edit_df, df])
 
 	return edit_df
@@ -679,15 +741,8 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 	chromosome, strand = ensembl_object.chromosome, ensembl_object.strand
 	activity_window = [activity_window[0] - 1, activity_window[1]]
 
-	# Dictionary to find the chemical properperty change due to the edit
-	aa_chem = {"G": "Non-Polar", "A": "Non-Polar", "V": "Non-Polar", "C": "Polar", "P": "Non-Polar",
-			   "L": "Non-Polar", "I": "Non-Polar", "M": "Non-Polar", "W": "Non-Polar", "F": "Non-Polar",
-			   "S": "Polar", "T": "Polar", "Y": "Polar", "N": "Polar", "Q": "Polar", "K": "Charged",
-			   "R": "Charged", "H": "Charged", "D": "Charged", "E": "Charged"}
-
 	# Transcript filtration
-
-	if transcript_id != "canonical":
+	if transcript_id is not None:
 		loc_edit_df = edit_df[edit_df.Transcript_ID == transcript_id]
 	else:
 		for transcript, transcript_dict in ensembl_object.info_dict.items():
@@ -695,7 +750,6 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 				loc_edit_df = edit_df[edit_df.Transcript_ID == transcript]
 
 	# Each gRNA at a time
-
 	row_dicts = list()
 	for direction, direction_df in loc_edit_df.groupby(["Direction"]):
 		if direction == "left":
@@ -812,11 +866,12 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 	return hgvs_df
 
 
-def retrieve_vep_info(hgvs_df, ensembl_object):
+def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id):
 	"""
 	Collect Ensembl VEP information for given edits
 	:param hgvs_df: The HGVS notations of all possible variants
 	:param ensembl_object: The Ensembl Object created with Ensembl().
+	:param transcript_id: The interested Ensembl transcript id
 	:return uniprot_results: The Uniprot IDs in which edit occurs (swissprot or trembl)
 	"""
 
@@ -828,6 +883,11 @@ def retrieve_vep_info(hgvs_df, ensembl_object):
 
 	chromosome, strand = ensembl_object.chromosome, ensembl_object.strand
 
+	if transcript_id is None:
+		for transcript, transcript_dict in ensembl_object.info_dict.items():
+			if transcript_dict["canonical"]:
+				transcript_id = transcript
+
 	# Decide the server
 	server = "http://grch37.rest.ensembl.org" if ensembl_object.assembly == "hg19" \
 		else "https://rest.ensembl.org"
@@ -836,7 +896,7 @@ def retrieve_vep_info(hgvs_df, ensembl_object):
 	for ind, row in hgvs_df.iterrows():
 		# VEP API request
 
-		vep = "/vep/human/hgvs/%s?Blosum62=1;Conservation=1;" \
+		vep = "/vep/human/hgvs/%s?Blosum62=1;Conservation=1;Mastermind=1;" \
 			  "LoF=1;CADD=1;protein=1;variant_class=1;hgvs=1;uniprot=1" % row.HGVS
 		vep_request = requests.get(server + vep, headers={"Content-Type": "application/json"})
 
@@ -851,33 +911,39 @@ def retrieve_vep_info(hgvs_df, ensembl_object):
 				 None, None, None, None, None, None, None, None, None, None, None, None, None, None]],
 				columns = ["Hugo_Symbol", "CRISPR_PAM_Sequence", "CRISPR_PAM_Location", "gRNA_Target_Sequence",
 						   "gRNA_Target_Location", "Edit_Position", "Direction", "Transcript_ID",
-						   "HGVSC_Transcript_ID", "Exon_ID", "cDNA_Change", "Edited_Codon", "New_Codon",
-						   "Protein_ID", "Protein_Position", "Protein_Change", "Edited_AA", "Edited_AA_Prop",
-						   "New_AA", "New_AA_Prop", "is_Synonymous", "is_Stop", "polyphen_score",
-						   "polyphen_prediction", "sift_score", "sift_prediction", "cadd_phred", "cadd_raw",
-						   "lof", "impact", "blosum62", "consequence_terms", "is_ClinVar", "clinical_allele",
+						   "Exon_ID", "Protein_ID", "VEP_input", "variant_classification", "cDNA_Change",
+						   "Edited_Codon", "New_Codon", "Protein_Position", "Protein_Change", "Edited_AA",
+						   "Edited_AA_Prop", "New_AA", "New_AA_Prop", "is_Synonymous", "is_Stop", "swissprot",
+						   "polyphen_score", "polyphen_prediction", "sift_score", "sift_prediction", "cadd_phred",
+						   "cadd_raw", "lof", "impact", "blosum62", "consequence_terms", "is_clinical", "clinical_allele",
 						   "clinical_id", "clinical_significance"])
 			vep_dfs.append(na_df)
 
 
 		else:
-			vep_transcript_results, vep_clinical_results = [], []
+			vep_initials, vep_transcript_results, vep_clinical_results = [], [], []
 			vep_transcript_interested = ["hgvsc", "hgvsp", "protein_id", "transcript_id",
 										 "amino_acids", "codons", "polyphen_score",
 										 "polyphen_prediction", "sift_score", "sift_prediction",
 										 "cadd_phred", "cadd_raw", "lof", "impact", "blosum62",
-										 "protein_start", "consequence_terms"]
+										 "protein_start", "consequence_terms", "swissprot", "protein_id"]
 
 			for x in vep_request.json():
+				vep_initial_result = {}
+				if "variant_class" in x.keys():
+					vep_initial_result["variant_classification"] = x["variant_class"]
+					vep_initial_result["VEP_input"] = x["id"]
+					vep_initials.append(vep_initial_result)
+
 				for t in x["transcript_consequences"]:
 					vep_transcript_result = {}
-					if t["strand"] == strand:
-						if t["gene_id"] == ensembl_object.gene_id:
-							for opt in vep_transcript_interested:
-								if opt in t.keys():
-									vep_transcript_result[opt] = t[opt]
-								else:
-									vep_transcript_result[opt] = None
+					if t["strand"] == strand and t["gene_id"] == ensembl_object.gene_id \
+							and t["transcript_id"] == transcript_id:
+						for opt in vep_transcript_interested:
+							if opt in t.keys():
+								vep_transcript_result[opt] = t[opt]
+							else:
+								vep_transcript_result[opt] = None
 
 							vep_transcript_results.append(vep_transcript_result)
 
@@ -889,6 +955,7 @@ def retrieve_vep_info(hgvs_df, ensembl_object):
 							vep_clinical_result["clinical_allele"] = c["allele_string"] \
 								if "allele_string" in c.keys() else None
 							vep_clinical_result["clinical_id"] = c["id"] if "id" in c.keys() else None
+
 							clinical_sig = ''
 							if "clin_sig" in c.keys():
 								for sig in c["clin_sig"]:
@@ -898,21 +965,25 @@ def retrieve_vep_info(hgvs_df, ensembl_object):
 							else:
 								clinical_sig = None
 							vep_clinical_result["clinical_significance"] = clinical_sig
-							clinvars = ''
+							var_syns = ''
 							if "var_synonyms" in c.keys():
 								if type(c["var_synonyms"]) == str:
 									# if "ClinVar" in c["var_synonyms"].keys():
-									for clnv in c["var_synonyms"]:  # ["ClinVar"]:
+									for clnv in c["var_synonyms"]:
 										clnv += ", "
-										clinvars += clnv
-									if clinvars != '' and clinvars[-2:] == ", ":
-										clinvars = clinvars[:-2]
-									elif clinvars == '':
-										clinvars = None
-							vep_clinical_result["ClinVar"] = clinvars
+										var_syns += clnv
+									if var_syns != '' and var_syns[-2:] == ", ":
+										var_syns = var_syns[:-2]
+									elif var_syns == '':
+										var_syns = None
+							vep_clinical_result["var_synonyms"] = var_syns
 
 							vep_clinical_results.append(vep_clinical_result)
 
+				if vep_initials: vep_i_df = pandas.DataFrame(vep_initials)
+				else:
+					vep_i_df = pandas.DataFrame(
+						None, index=[0], columns=["VEP_input", "variant_classification"])
 				if vep_transcript_results: vep_t_df = pandas.DataFrame(vep_transcript_results)
 				else:
 					vep_t_df = pandas.DataFrame(
@@ -925,10 +996,11 @@ def retrieve_vep_info(hgvs_df, ensembl_object):
 				else:
 					vep_c_df = pandas.DataFrame(
 						None, index=[0], columns=["clinical_allele", "clinical_id",
-												  "clinical_significance", "ClinVar"])
+												  "clinical_significance", "var_synonyms"])
 
-				vep_t_df["merging"], vep_c_df["merging"] = 1, 1
-				vep_df = pandas.merge(vep_t_df, vep_c_df, on="merging").drop(columns=["merging"])
+				vep_t_df["merging"], vep_c_df["merging"], vep_i_df["merging"] = 1, 1, 1
+				vep_df1 = pandas.merge(vep_t_df, vep_c_df, on="merging")
+				vep_df = pandas.merge(vep_df1, vep_i_df, on="merging").drop(columns=["merging"])
 
 				if vep_df.empty is False: vep_dfs.append(vep_df)
 
@@ -946,8 +1018,7 @@ def retrieve_vep_info(hgvs_df, ensembl_object):
 					lambda x: x.transcript_id
 					if x.transcript_id is not None and pandas.isna(x.transcript_id) is False and
 					   type(x.transcript_id) != float else None, axis=1)
-				VEP_df["HGVSC_Transcript_ID"] = VEP_df.apply(
-					lambda x: x.hgvsc.split(".")[0] if x.hgvsc is not None else None, axis=1)
+
 				VEP_df["Exon_ID"] = row["Exon_ID"]
 				VEP_df["cDNA_Change"] = VEP_df.apply(
 					lambda x: x.hgvsc.split(":")[1].split(".")[1]
@@ -1011,21 +1082,24 @@ def retrieve_vep_info(hgvs_df, ensembl_object):
 									  x.New_AA == "*"
 					else (None if x.New_AA is None else False), axis=1)
 
-				VEP_df["is_ClinVar"] = VEP_df.apply(
-					lambda x: True if x.ClinVar is not None else False, axis=1)
+				VEP_df["swissprot"] = VEP_df.apply(
+					lambda x: x.swissprot[0].split(".")[0] if x.swissprot is not None else False, axis=1)
+
+				VEP_df["is_clinical"] = VEP_df.apply(
+					lambda x: True if x.clinical_allele is not None else False, axis=1)
 				VEP_df["consequence_terms"] = VEP_df.apply(
 					lambda x: ",".join(x.consequence_terms) if type(x.consequence_terms) == list
 					else x.consequence_terms,axis=1)
 
 				VEP_df = VEP_df[["Hugo_Symbol", "CRISPR_PAM_Sequence", "CRISPR_PAM_Location",
 								 "gRNA_Target_Sequence", "gRNA_Target_Location",
-								 "Edit_Position", "Direction", "Transcript_ID", "HGVSC_Transcript_ID",
-								 "Exon_ID", "cDNA_Change",
-								 "Edited_Codon", "New_Codon", "Protein_ID", "Protein_Position",
+								 "Edit_Position", "Direction", "Transcript_ID",
+								 "Exon_ID", "Protein_ID", "VEP_input", "variant_classification", "cDNA_Change",
+								 "Edited_Codon", "New_Codon", "Protein_Position",
 								 "Protein_Change", "Edited_AA", "Edited_AA_Prop", "New_AA", "New_AA_Prop",
-								 "is_Synonymous", "is_Stop", "polyphen_score", "polyphen_prediction",
+								 "is_Synonymous", "is_Stop", "swissprot", "polyphen_score", "polyphen_prediction",
 								 "sift_score", "sift_prediction", "cadd_phred", "cadd_raw", "lof",
-								 "impact", "blosum62", "consequence_terms", "is_ClinVar", "clinical_allele",
+								 "impact", "blosum62", "consequence_terms", "is_clinical", "clinical_allele",
 								 "clinical_id", "clinical_significance"]]
 				all_vep_dfs.append(VEP_df)
 
@@ -1108,30 +1182,30 @@ def annotate_edits(ensembl_object, vep_df):
 			else:
 				dom, ptm, uniprot, reviewed = None, None, None, None
 
-			df_d = {"Hugo_Symbol": row["Hugo_Symbol"], "CRISPR_PAM_Sequence": row["CRISPR_PAM_Sequence"],
-					"CRISPR_PAM_Location": row["CRISPR_PAM_Location"],
-					"gRNA_Target_Sequence": row["gRNA_Target_Sequence"],
-					"gRNA_Target_Location": row["gRNA_Target_Location"], "Edit_Position": row["Edit_Position"],
-					"Direction": row["Direction"], "Transcript_ID": row["Transcript_ID"], "Exon_ID": row["Exon_ID"],
-					"cDNA_Change": row["cDNA_Change"], "Edited_Codon": row["Edited_Codon"],
-					"New_Codon": row["New_Codon"], "Protein_ID": row["Protein_ID"],
-					"Protein_Position": row["Protein_Position"], "Protein_Change": row["Protein_Change"],
-					"Edited_AA": row["Edited_AA"], "Edited_AA_Prop": row["Edited_AA_Prop"],
-					"New_AA": row["New_AA"], "New_AA_Prop": row["New_AA_Prop"], "is_Synonymous": row["is_Synonymous"],
-					"is_Stop": row["is_Stop"], "polyphen_score": row["polyphen_score"],
-					"polyphen_prediction": row["polyphen_prediction"], "sift_score": row["sift_score"],
-					"sift_prediction": row["sift_prediction"], "cadd_phred": row["cadd_phred"],
-					"cadd_raw": row["cadd_raw"], "lof": row["lof"], "impact": row["impact"],
-					"blosum62": row["blosum62"],
-					"consequence_terms": row["consequence_terms"], "is_ClinVar": row["is_ClinVar"],
-					"clinical_allele": row["clinical_allele"], "clinical_id": row["clinical_id"],
-					"clinical_significance": row["clinical_significance"], "Domain": dom, "PTM": ptm,
-					"Uniprot": uniprot, "Reviewed": reviewed}
-			df = pandas.DataFrame(df_d)
+			df_d = {"Hugo_Symbol": [row["Hugo_Symbol"]], "CRISPR_PAM_Sequence": [row["CRISPR_PAM_Sequence"]],
+					"CRISPR_PAM_Location": [row["CRISPR_PAM_Location"]],
+					"gRNA_Target_Sequence": [row["gRNA_Target_Sequence"]],
+					"gRNA_Target_Location": [row["gRNA_Target_Location"]], "Edit_Position": [row["Edit_Position"]],
+					"Direction": [row["Direction"]], "Transcript_ID": [row["Transcript_ID"]], "Exon_ID": [row["Exon_ID"]],
+					"cDNA_Change": [row["cDNA_Change"]], "Edited_Codon": [row["Edited_Codon"]],
+					"New_Codon": [row["New_Codon"]], "Protein_ID": [row["Protein_ID"]],
+					"Protein_Position": [row["Protein_Position"]], "Protein_Change": [row["Protein_Change"]],
+					"Edited_AA": [row["Edited_AA"]], "Edited_AA_Prop": [row["Edited_AA_Prop"]],
+					"New_AA": [row["New_AA"]], "New_AA_Prop": [row["New_AA_Prop"]], "is_Synonymous": [row["is_Synonymous"]],
+					"is_Stop": [row["is_Stop"]], "polyphen_score": [row["polyphen_score"]],
+					"polyphen_prediction": [row["polyphen_prediction"]], "sift_score": [row["sift_score"]],
+					"sift_prediction": [row["sift_prediction"]], "cadd_phred": [row["cadd_phred"]],
+					"cadd_raw": [row["cadd_raw"]], "lof": [row["lof"]], "impact": [row["impact"]],
+					"blosum62": [row["blosum62"]],"consequence_terms": [row["consequence_terms"]],
+					"is_ClinVar": [row["is_ClinVar"]], "clinical_allele": [row["clinical_allele"]],
+					"clinical_id": [row["clinical_id"]], "clinical_significance": [row["clinical_significance"]],
+					"Domain": [dom], "PTM": [ptm], "Uniprot": [uniprot], "Reviewed": [reviewed]}
+
+			df = pandas.DataFrame.from_dict(df_d)
 			analysis_dfs.append(df)
 
 	if analysis_dfs:
-		analysis_df = pandas.concat(analysis_dfs)
+		analysis_df = pandas.concat(analysis_dfs, ignore_index=True)
 	else: analysis_df = None
 
 	return analysis_df
@@ -1408,7 +1482,6 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 			print("\nHGVS Data Frame cannot be created because it is empty.")
 
 		whole_vep_df = retrieve_vep_info(hgvs_df = hgvs_df, ensembl_object = ensembl_obj)
-		print(whole_vep_df)
 		#if len(whole_vep_df.index) != 0:
 		print("\nVEP Data Frame was created!")
 		whole_vep_df.to_csv(path + args["OUTPUT_FILE"] + "_vep_df.csv")
