@@ -719,6 +719,13 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 										   "Transcript_ID", "Exon_ID", "Guide_in_CDS", "Edit_in_Exon", "Edit_in_CDS"])
 			edit_df = pandas.concat([edit_df, df])
 
+		edit_df["# Edits/guide"] = None
+		for guide, g_df in edit_df.groupby(["gRNA_Target_Sequence"]):
+			for edit_loc, grna_edit_df in g_df.groupby(["Edit_Location"]):
+				inds = list(edit_df[(edit_df.gRNA_Target_Sequence == guide) &
+									(edit_df.Edit_Location == edit_loc)].index)
+				edit_df.at[ind, "# Edits/guide"] = len(grna_edit_df.index)
+
 	return edit_df
 
 
