@@ -716,10 +716,11 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 										   "Transcript_ID", "Exon_ID", "Guide_in_CDS", "Edit_in_Exon", "Edit_in_CDS"])
 			edit_df = pandas.concat([edit_df, df])
 
-	edit_df["# Edits/guide"] = None
+	edit_df["# Edits/guide"] = 0
 	for guide, g_df in edit_df.groupby(["gRNA_Target_Sequence"]):
 		unique_edits_per_guide = len(set(list(g_df["Edit_Location"])))
 		inds = list(edit_df[edit_df.gRNA_Target_Sequence == guide].index)
+		print(inds)
 		edit_df.loc[inds, "# Edits/guide"] = unique_edits_per_guide
 
 	return edit_df
@@ -870,6 +871,28 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 	return hgvs_df
 
 
+def check_unequality_in_AA(aa_lis1, aa_lis2):
+	diff_aa = list()
+	for i in range(len(aa_lis1)):
+		if aa_lis1[i] != aa_lis2[i]:
+			diff_aa.append(i)
+	return diff_aa
+
+
+def protein_position_correction(protein_start, aa_list1, aa_list2):
+
+	if aa_list1 is not None and aa_list2 is not None:
+		if len(aa_list1) == 1 and len(aa_list2) == 1: return protein_start
+		elif len(check_unequality_in_AA(aa_list1, aa_list2)) == len(aa_list1):
+			return str(protein_start) + ":" + str(protein_start + len(aa_list1) - 1)
+		else:
+			diff_pos = check_unequality_in_AA(aa_list1, aa_list2)
+			diff_pos.sort()
+			return "-".join([protein_start + pos for pos in diff_pos])
+	else:
+		return None
+
+
 def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 	"""
 	Collect Ensembl VEP information for given edits
@@ -911,11 +934,11 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 			print("No response from VEP for %s" % row.HGVS)
 			na_df = pandas.DataFrame(
 				[[row.Hugo_Symbol, row.CRISPR_PAM_Sequence, row.CRISPR_PAM_Location, row.gRNA_Target_Sequence,
-				 row.gRNA_Target_Location, row.Edit_Location, row.Direction, row.Transcript_ID, None,
+				 row.gRNA_Target_Location, row.Edit_Location, row.Edit_Type, row.Direction, row.Transcript_ID, None,
 				 row.Exon_ID, None, None, None, None, None, None, None, None, None, None, None, None,
 				 None, None, None, None, None, None, None, None, None, None, None, None, None, None]],
 				columns = ["Hugo_Symbol", "CRISPR_PAM_Sequence", "CRISPR_PAM_Location", "gRNA_Target_Sequence",
-						   "gRNA_Target_Location", "Edit_Position", "Direction", "Transcript_ID",
+						   "gRNA_Target_Location", "Edit_Position", "Edit_Type", "Direction", "Transcript_ID",
 						   "Exon_ID", "Protein_ID", "VEP_input", "variant_classification", "cDNA_Change",
 						   "Edited_Codon", "New_Codon", "Protein_Position", "Protein_Change", "Edited_AA",
 						   "Edited_AA_Prop", "New_AA", "New_AA_Prop", "is_Synonymous", "is_Stop", "swissprot",
@@ -973,7 +996,6 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 							var_syns = ''
 							if "var_synonyms" in c.keys():
 								if type(c["var_synonyms"]) == str:
-									# if "ClinVar" in c["var_synonyms"].keys():
 									for clnv in c["var_synonyms"]:
 										clnv += ", "
 										var_syns += clnv
@@ -1038,7 +1060,7 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 					if x.hgvsp is not None and pandas.isna(x.hgvsp) is False and type(x.hgvsp) != float else None, axis=1)
 
 				VEP_df["Protein_Position"] = VEP_df.apply(
-					lambda x: x.protein_start if x.protein_start is not None else None, axis=1)
+					lambda x: protein_position_correction(x.protein_start), axis=1)
 
 				VEP_df["Edited_AA"] = VEP_df.apply(
 					lambda x: x.amino_acids.split("/")[0]
@@ -1058,11 +1080,14 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 						else None), axis=1)
 
 				VEP_df["Edited_AA_Prop"] = VEP_df.apply(
-					lambda x: aa_chem[x.Edited_AA] if x.Edited_AA is not None and x.Edited_AA in aa_chem.keys() else None,
-					axis=1)
+					lambda x: aa_chem[x.Edited_AA] if x.Edited_AA is not None and x.Edited_AA in aa_chem.keys() else
+					("-".join([aa_chem[i] for i in x.Edited_AA if x.Edited_AA is not None and x.Edited_AA in aa_chem.keys()])
+					 if len(x.Edited_AA) > 1 else None),axis=1)
+
 				VEP_df["New_AA_Prop"] = VEP_df.apply(
 					lambda x: aa_chem[x.New_AA] if x.New_AA is not None and x.New_AA != "*" and x.New_AA in aa_chem.keys()
-					else None, axis=1)
+					else ("-".join([aa_chem[i] for i in x.New_AA if x.New_AA is not None and x.New_AA != "*" and
+									x.New_AA in aa_chem.keys()]) if len(x.New_AA) > 1 else None),axis=1)
 
 				VEP_df["Edited_Codon"] = VEP_df.apply(
 					lambda x: x.codons.split("/")[0]
@@ -1085,20 +1110,22 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 				VEP_df["is_Stop"] = VEP_df.apply(
 					lambda x: True if x.New_AA is not None and
 									  x.New_AA == "*"
-					else (None if x.New_AA is None else False), axis=1)
+					else (True if x.New_AA is not None and "*" in x.New_AA
+						  else (None if x.New_AA is None else False)), axis=1)
 
 				VEP_df["swissprot"] = VEP_df.apply(
 					lambda x: x.swissprot[0].split(".")[0] if x.swissprot is not None else False, axis=1)
 
 				VEP_df["is_clinical"] = VEP_df.apply(
 					lambda x: True if x.clinical_allele is not None else False, axis=1)
+
 				VEP_df["consequence_terms"] = VEP_df.apply(
 					lambda x: ",".join(x.consequence_terms) if type(x.consequence_terms) == list
 					else x.consequence_terms,axis=1)
 
 				VEP_df = VEP_df[["Hugo_Symbol", "CRISPR_PAM_Sequence", "CRISPR_PAM_Location",
 								 "gRNA_Target_Sequence", "gRNA_Target_Location",
-								 "Edit_Position", "Direction", "Transcript_ID",
+								 "Edit_Position", "Edit_Type", "Direction", "Transcript_ID",
 								 "Exon_ID", "Protein_ID", "VEP_input", "variant_classification", "cDNA_Change",
 								 "Edited_Codon", "New_Codon", "Protein_Position",
 								 "Protein_Change", "Edited_AA", "Edited_AA_Prop", "New_AA", "New_AA_Prop",
@@ -1106,6 +1133,7 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 								 "sift_score", "sift_prediction", "cadd_phred", "cadd_raw", "lof",
 								 "impact", "blosum62", "consequence_terms", "is_clinical", "clinical_allele",
 								 "clinical_id", "clinical_significance"]]
+				VEP_df = VEP_df.drop_duplicates()
 				all_vep_dfs.append(VEP_df)
 
 	whole_VEP_df = pandas.concat(all_vep_dfs)
@@ -1191,9 +1219,10 @@ def annotate_edits(ensembl_object, vep_df):
 					"CRISPR_PAM_Location": [row["CRISPR_PAM_Location"]],
 					"gRNA_Target_Sequence": [row["gRNA_Target_Sequence"]],
 					"gRNA_Target_Location": [row["gRNA_Target_Location"]], "Edit_Position": [row["Edit_Position"]],
-					"Direction": [row["Direction"]], "Transcript_ID": [row["Transcript_ID"]], "Exon_ID": [row["Exon_ID"]],
-					"cDNA_Change": [row["cDNA_Change"]], "Edited_Codon": [row["Edited_Codon"]],
-					"New_Codon": [row["New_Codon"]], "Protein_ID": [row["Protein_ID"]],
+					"Edit_Type": [row["Edit_Type"]], "Direction": [row["Direction"]], "Transcript_ID": [row["Transcript_ID"]],
+					"Exon_ID": [row["Exon_ID"]], "Protein_ID": [row["Protein_ID"]], "VEP_input": [row["VEP_input"]],
+					"variant_classification" : [row["variant_classification"]], "cDNA_Change": [row["cDNA_Change"]],
+					"Edited_Codon": [row["Edited_Codon"]], "New_Codon": [row["New_Codon"]],
 					"Protein_Position": [row["Protein_Position"]], "Protein_Change": [row["Protein_Change"]],
 					"Edited_AA": [row["Edited_AA"]], "Edited_AA_Prop": [row["Edited_AA_Prop"]],
 					"New_AA": [row["New_AA"]], "New_AA_Prop": [row["New_AA_Prop"]], "is_Synonymous": [row["is_Synonymous"]],
@@ -1202,9 +1231,10 @@ def annotate_edits(ensembl_object, vep_df):
 					"sift_prediction": [row["sift_prediction"]], "cadd_phred": [row["cadd_phred"]],
 					"cadd_raw": [row["cadd_raw"]], "lof": [row["lof"]], "impact": [row["impact"]],
 					"blosum62": [row["blosum62"]],"consequence_terms": [row["consequence_terms"]],
-					"is_ClinVar": [row["is_ClinVar"]], "clinical_allele": [row["clinical_allele"]],
+					"is_clinical": [row["is_clinical"]], "clinical_allele": [row["clinical_allele"]],
 					"clinical_id": [row["clinical_id"]], "clinical_significance": [row["clinical_significance"]],
-					"Domain": [dom], "PTM": [ptm], "Uniprot": [uniprot], "Reviewed": [reviewed]}
+					"Domain": [dom], "PTM": [ptm], "SwissProt_VEP": [row["swissprot"]], "Uniprot": [uniprot],
+					"Reviewed": [reviewed]}
 
 			df = pandas.DataFrame.from_dict(df_d)
 			analysis_dfs.append(df)
