@@ -870,7 +870,7 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 	return hgvs_df
 
 
-def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id):
+def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 	"""
 	Collect Ensembl VEP information for given edits
 	:param hgvs_df: The HGVS notations of all possible variants
@@ -1485,7 +1485,7 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 		else:
 			print("\nHGVS Data Frame cannot be created because it is empty.")
 
-		whole_vep_df = retrieve_vep_info(hgvs_df = hgvs_df, ensembl_object = ensembl_obj)
+		whole_vep_df = retrieve_vep_info(hgvs_df = hgvs_df, ensembl_object = ensembl_obj, transcript_id=args["TRANSCRIPT"])
 		#if len(whole_vep_df.index) != 0:
 		print("\nVEP Data Frame was created!")
 		whole_vep_df.to_csv(path + args["OUTPUT_FILE"] + "_vep_df.csv")
