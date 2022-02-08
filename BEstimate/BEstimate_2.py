@@ -1,10 +1,10 @@
 # -----------------------------------------------------------------------------------------#
-#                                                                                         #
-#                                  B E s t i m a t e                                      #
-#                        Author : Cansu Dincer cd7@sanger.ac.uk                           #
-#                         Dr Matthew Coelho & Dr Mathew Garnett                           #
-#                              Wellcome Sanger Institute                                  #
-#                                                                                         #
+#                                                                                          #
+#                                  B E s t i m a t e                                       #
+#                        Author : Cansu Dincer cd7@sanger.ac.uk                            #
+#                         Dr Matthew Coelho & Dr Mathew Garnett                            #
+#                              Wellcome Sanger Institute                                   #
+#                                                                                          #
 # -----------------------------------------------------------------------------------------#
 
 # Import necessary packages
@@ -389,6 +389,7 @@ class Ensembl:
 
 	def check_cds(self, transcript_id, start, end):
 		range_locations = list(range(start, end))
+		in_cds = False
 		if self.info_dict != {}:
 			if transcript_id in self.info_dict.keys():
 				for transcript_dict in self.info_dict[transcript_id]:
@@ -397,10 +398,6 @@ class Ensembl:
 							for loc in range_locations:
 								if loc in protein_pos:
 									in_cds = True
-									return in_cds
-					else: in_cds = False
-			else: in_cds = False
-		else: in_cds = False
 
 		return in_cds
 
@@ -627,7 +624,8 @@ def extract_grna_sites(hugo_symbol, pam_sequence, searched_nucleotide,
 											   "Location", "Direction", "Gene_ID",
 											   "Transcript_ID", "Exon_ID"])
 				crisprs_df = pandas.concat([crisprs_df, df])
-				crisprs_df["Hugo_Symbol"] = hugo_symbol
+
+	crisprs_df["Hugo_Symbol"] = hugo_symbol
 
 	return crisprs_df
 
@@ -659,7 +657,6 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 										"Guide_in_CDS", "Edit_in_Exon", "Edit_in_CDS"])
 
 	for ind, row in crispr_df.iterrows():
-
 		loc1, loc2 = int(row["Location"].split(":")[1].split("-")[0]), int(row["Location"].split(":")[1].split("-")[1])
 		if loc1 < loc2:
 			guide_in_cds = ensembl_object.check_cds(row["Transcript_ID"], loc1, loc2 + 1)
@@ -700,10 +697,10 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 
 				df = pandas.DataFrame([[row["Hugo_Symbol"], row["CRISPR_PAM_Sequence"],
 										row["gRNA_Target_Sequence"], row["Location"], actual_ind,
-										row["Direction"], ensembl_object.gene_id, row["Transcript_ID"],
-										row["Exon_ID"], guide_in_cds, edit_in_exon, edit_in_cds]],
+										row["Direction"], ensembl_object.strand, ensembl_object.gene_id,
+										row["Transcript_ID"], row["Exon_ID"], guide_in_cds, edit_in_exon, edit_in_cds]],
 									  columns=["Hugo_Symbol", "CRISPR_PAM_Sequence", "gRNA_Target_Sequence",
-											   "Location", "Edit_Location", "Direction",
+											   "Location", "Edit_Location", "Direction", "Strand",
 											   "Gene_ID", "Transcript_ID", "Exon_ID", "Guide_in_CDS",
 											   "Edit_in_Exon", "Edit_in_CDS"])
 				edit_df = pandas.concat([edit_df, df])
@@ -712,19 +709,18 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 			# If not --> no edit
 			df = pandas.DataFrame([[row["Hugo_Symbol"], row["CRISPR_PAM_Sequence"],
 									row["gRNA_Target_Sequence"], row["Location"], "No edit",
-									row["Direction"], ensembl_object.gene_id, row["Transcript_ID"],
-									row["Exon_ID"], guide_in_cds, False, False]],
+									row["Direction"], ensembl_object.strand, ensembl_object.gene_id,
+									row["Transcript_ID"], row["Exon_ID"], guide_in_cds, False, False]],
 								  columns=["Hugo_Symbol", "CRISPR_PAM_Sequence", "gRNA_Target_Sequence",
-										   "Location", "Edit_Location", "Direction", "Gene_ID",
+										   "Location", "Edit_Location", "Direction", "Strand", "Gene_ID",
 										   "Transcript_ID", "Exon_ID", "Guide_in_CDS", "Edit_in_Exon", "Edit_in_CDS"])
 			edit_df = pandas.concat([edit_df, df])
 
-		edit_df["# Edits/guide"] = None
-		for guide, g_df in edit_df.groupby(["gRNA_Target_Sequence"]):
-			for edit_loc, grna_edit_df in g_df.groupby(["Edit_Location"]):
-				inds = list(edit_df[(edit_df.gRNA_Target_Sequence == guide) &
-									(edit_df.Edit_Location == edit_loc)].index)
-				edit_df.at[ind, "# Edits/guide"] = len(grna_edit_df.index)
+	edit_df["# Edits/guide"] = None
+	for guide, g_df in edit_df.groupby(["gRNA_Target_Sequence"]):
+		unique_edits_per_guide = len(set(list(g_df["Edit_Location"])))
+		inds = list(edit_df[edit_df.gRNA_Target_Sequence == guide].index)
+		edit_df.at[inds, "# Edits/guide"] = unique_edits_per_guide
 
 	return edit_df
 
@@ -753,8 +749,10 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 		loc_edit_df = edit_df[edit_df.Transcript_ID == transcript_id]
 	else:
 		for transcript, transcript_dict in ensembl_object.info_dict.items():
-			if transcript_dict["canonical"]:
-				loc_edit_df = edit_df[edit_df.Transcript_ID == transcript]
+			print(transcript_dict)
+			for d in transcript_dict:
+				if transcript_dict["canonical"]:
+					loc_edit_df = edit_df[edit_df.Transcript_ID == transcript]
 
 	# Each gRNA at a time
 	row_dicts = list()
