@@ -720,7 +720,6 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 	for guide, g_df in edit_df.groupby(["gRNA_Target_Sequence"]):
 		unique_edits_per_guide = len(set(list(g_df["Edit_Location"])))
 		inds = list(edit_df[edit_df.gRNA_Target_Sequence == guide].index)
-		print(inds)
 		edit_df.loc[inds, "# Edits/guide"] = unique_edits_per_guide
 
 	return edit_df
@@ -1060,7 +1059,8 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 					if x.hgvsp is not None and pandas.isna(x.hgvsp) is False and type(x.hgvsp) != float else None, axis=1)
 
 				VEP_df["Protein_Position"] = VEP_df.apply(
-					lambda x: protein_position_correction(x.protein_start), axis=1)
+					lambda x: protein_position_correction(x.protein_start, x.amino_acids.split("/")[0],
+														  x.amino_acids.split("/")[1]), axis=1)
 
 				VEP_df["Edited_AA"] = VEP_df.apply(
 					lambda x: x.amino_acids.split("/")[0]
