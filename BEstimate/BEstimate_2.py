@@ -1215,6 +1215,7 @@ def annotate_edits(ensembl_object, vep_df):
 			else:
 				dom, ptm, uniprot, reviewed = None, None, None, None
 
+
 			df_d = {"Hugo_Symbol": [row["Hugo_Symbol"]], "CRISPR_PAM_Sequence": [row["CRISPR_PAM_Sequence"]],
 					"CRISPR_PAM_Location": [row["CRISPR_PAM_Location"]],
 					"gRNA_Target_Sequence": [row["gRNA_Target_Sequence"]],
