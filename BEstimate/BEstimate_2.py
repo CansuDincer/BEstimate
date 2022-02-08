@@ -884,13 +884,13 @@ def check_unequality_in_AA(aa_lis1, aa_lis2):
 def protein_position_correction(protein_start, aa_list1, aa_list2):
 
 	if aa_list1 is not None and aa_list2 is not None:
-		if len(aa_list1) == 1 and len(aa_list2) == 1: return protein_start
+		if len(aa_list1) == 1 and len(aa_list2) == 1: return str(protein_start)
 		elif len(check_unequality_in_AA(aa_list1, aa_list2)) == len(aa_list1):
 			return str(protein_start) + ":" + str(protein_start + len(aa_list1) - 1)
 		else:
 			diff_pos = check_unequality_in_AA(aa_list1, aa_list2)
 			diff_pos.sort()
-			return "-".join([protein_start + pos for pos in diff_pos])
+			return "-".join([str(protein_start + pos) for pos in diff_pos])
 	else:
 		return None
 
