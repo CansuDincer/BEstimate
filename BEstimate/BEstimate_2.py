@@ -749,9 +749,8 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 		loc_edit_df = edit_df[edit_df.Transcript_ID == transcript_id]
 	else:
 		for transcript, transcript_dict in ensembl_object.info_dict.items():
-			print(transcript_dict)
 			for d in transcript_dict:
-				if transcript_dict["canonical"]:
+				if d["canonical"]:
 					loc_edit_df = edit_df[edit_df.Transcript_ID == transcript]
 
 	# Each gRNA at a time
