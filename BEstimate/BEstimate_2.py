@@ -587,7 +587,7 @@ def extract_grna_sites(hugo_symbol, pam_sequence, searched_nucleotide,
 	print("\nCRISPR df is filling...")
 
 	crisprs_df = pandas.DataFrame(columns=["Hugo_Symbol", "CRISPR_PAM_Sequence", "gRNA_Target_Sequence",
-										   "Location", "Direction", "Gene_ID", "Transcript_ID", "Exon_ID"])
+										   "Location", "Direction", "Gene_ID", "Transcript_ID", "Exon_ID", "guide_in_CDS"])
 
 	for direction, crispr in crisprs_dict.items():
 
@@ -626,6 +626,13 @@ def extract_grna_sites(hugo_symbol, pam_sequence, searched_nucleotide,
 				crisprs_df = pandas.concat([crisprs_df, df])
 
 	crisprs_df["Hugo_Symbol"] = hugo_symbol
+	crisprs_df["guide_in_CDS"] = crisprs_df.apply(
+		lambda x: ensembl_object.check_cds(x["Transcript_ID"], int(x["Location"].split(":")[1].split("-")[0]),
+										   int(x["Location"].split(":")[1].split("-")[1]) + 1)
+		if int(x["Location"].split(":")[1].split("-")[0]) < int(x["Location"].split(":")[1].split("-")[1])
+		else ensembl_object.check_cds(x["Transcript_ID"],int(x["Location"].split(":")[1].split("-")[1]),
+									  int(x["Location"].split(":")[1].split("-")[0]) +1), axis=1)
+
 
 	return crisprs_df
 
@@ -654,14 +661,9 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 	print("Edit df is filling...")
 	edit_df = pandas.DataFrame(columns=["Hugo_Symbol", "CRISPR_PAM_Sequence", "gRNA_Target_Sequence", "Location",
 										"Edit_Location", "Direction", "Strand", "Gene_ID", "Transcript_ID", "Exon_ID",
-										"Guide_in_CDS", "Edit_in_Exon", "Edit_in_CDS"])
+										"guide_in_CDS", "Edit_in_Exon", "Edit_in_CDS"])
 
 	for ind, row in crispr_df.iterrows():
-		loc1, loc2 = int(row["Location"].split(":")[1].split("-")[0]), int(row["Location"].split(":")[1].split("-")[1])
-		if loc1 < loc2:
-			guide_in_cds = ensembl_object.check_cds(row["Transcript_ID"], loc1, loc2 + 1)
-		else:
-			guide_in_cds = ensembl_object.check_cds(row["Transcript_ID"], loc2, loc1 + 1)
 
 		# Check only with the sequence having PAM since it only has the searched nucleotide!
 		searched_ind = [nuc_ind for nuc_ind in range(0, len(row["gRNA_Target_Sequence"]))
@@ -698,10 +700,11 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 				df = pandas.DataFrame([[row["Hugo_Symbol"], row["CRISPR_PAM_Sequence"],
 										row["gRNA_Target_Sequence"], row["Location"], actual_ind,
 										row["Direction"], ensembl_object.strand, ensembl_object.gene_id,
-										row["Transcript_ID"], row["Exon_ID"], guide_in_cds, edit_in_exon, edit_in_cds]],
+										row["Transcript_ID"], row["Exon_ID"], row["guide_in_CDS"],
+										edit_in_exon, edit_in_cds]],
 									  columns=["Hugo_Symbol", "CRISPR_PAM_Sequence", "gRNA_Target_Sequence",
 											   "Location", "Edit_Location", "Direction", "Strand",
-											   "Gene_ID", "Transcript_ID", "Exon_ID", "Guide_in_CDS",
+											   "Gene_ID", "Transcript_ID", "Exon_ID", "guide_in_CDS",
 											   "Edit_in_Exon", "Edit_in_CDS"])
 				edit_df = pandas.concat([edit_df, df])
 
@@ -710,10 +713,10 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 			df = pandas.DataFrame([[row["Hugo_Symbol"], row["CRISPR_PAM_Sequence"],
 									row["gRNA_Target_Sequence"], row["Location"], "No edit",
 									row["Direction"], ensembl_object.strand, ensembl_object.gene_id,
-									row["Transcript_ID"], row["Exon_ID"], guide_in_cds, False, False]],
+									row["Transcript_ID"], row["Exon_ID"], row["guide_in_CDS"], False, False]],
 								  columns=["Hugo_Symbol", "CRISPR_PAM_Sequence", "gRNA_Target_Sequence",
 										   "Location", "Edit_Location", "Direction", "Strand", "Gene_ID",
-										   "Transcript_ID", "Exon_ID", "Guide_in_CDS", "Edit_in_Exon", "Edit_in_CDS"])
+										   "Transcript_ID", "Exon_ID", "guide_in_CDS", "Edit_in_Exon", "Edit_in_CDS"])
 			edit_df = pandas.concat([edit_df, df])
 
 	edit_df["# Edits/guide"] = 0
@@ -1039,6 +1042,7 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 				VEP_df["gRNA_Target_Sequence"] = row["gRNA_Target_Sequence"]
 				VEP_df["gRNA_Target_Location"] = row["gRNA_Target_Location"]
 				VEP_df["Edit_Position"] = row["Edit_Location"]
+				VEP_df["Edit_Type"] = row["Edit_Type"]
 				VEP_df["Direction"] = row.Direction
 				VEP_df["Transcript_ID"] = VEP_df.apply(
 					lambda x: x.transcript_id
@@ -1059,8 +1063,8 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 					if x.hgvsp is not None and pandas.isna(x.hgvsp) is False and type(x.hgvsp) != float else None, axis=1)
 
 				VEP_df["Protein_Position"] = VEP_df.apply(
-					lambda x: protein_position_correction(x.protein_start, x.amino_acids.split("/")[0],
-														  x.amino_acids.split("/")[1]), axis=1)
+					lambda x: protein_position_correction(x.protein_start, x.amino_acids.split("/")[0], x.amino_acids.split("/")[1])
+					if x.amino_acids is not None and len(x.amino_acids.split("/")) > 1 else x.protein_start, axis=1)
 
 				VEP_df["Edited_AA"] = VEP_df.apply(
 					lambda x: x.amino_acids.split("/")[0]
