@@ -889,8 +889,9 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 
 	if transcript_id is None:
 		for transcript, transcript_dict in ensembl_object.info_dict.items():
-			if transcript_dict["canonical"]:
-				transcript_id = transcript
+			for d in transcript_dict:
+				if d["canonical"]:
+					transcript_id = transcript
 
 	# Decide the server
 	server = "http://grch37.rest.ensembl.org" if ensembl_object.assembly == "hg19" \
