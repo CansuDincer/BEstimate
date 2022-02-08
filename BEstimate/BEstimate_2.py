@@ -936,9 +936,10 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 			print("No response from VEP for %s" % row.HGVS)
 			na_df = pandas.DataFrame(
 				[[row.Hugo_Symbol, row.CRISPR_PAM_Sequence, row.CRISPR_PAM_Location, row.gRNA_Target_Sequence,
-				 row.gRNA_Target_Location, row.Edit_Location, row.Edit_Type, row.Direction, row.Transcript_ID, None,
-				 row.Exon_ID, None, None, None, None, None, None, None, None, None, None, None, None,
-				 None, None, None, None, None, None, None, None, None, None, None, None, None, None]],
+				 row.gRNA_Target_Location, row.Edit_Location, row.Edit_Type, row.Direction, row.Transcript_ID,
+				 row.Exon_ID, None, None, None, None, None, None, None, None, None, None, None,
+				 None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
+				  None, None]],
 				columns = ["Hugo_Symbol", "CRISPR_PAM_Sequence", "CRISPR_PAM_Location", "gRNA_Target_Sequence",
 						   "gRNA_Target_Location", "Edit_Position", "Edit_Type", "Direction", "Transcript_ID",
 						   "Exon_ID", "Protein_ID", "VEP_input", "variant_classification", "cDNA_Change",
@@ -1085,13 +1086,15 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 
 				VEP_df["Edited_AA_Prop"] = VEP_df.apply(
 					lambda x: aa_chem[x.Edited_AA] if x.Edited_AA is not None and x.Edited_AA in aa_chem.keys() else
-					("-".join([aa_chem[i] for i in x.Edited_AA if x.Edited_AA is not None and x.Edited_AA in aa_chem.keys()])
-					 if len(x.Edited_AA) > 1 else None),axis=1)
+					("-".join([aa_chem[i] for i in x.Edited_AA])
+					 if x.Edited_AA is not None and x.Edited_AA in aa_chem.keys()
+						and x.Edited_AA != "*" and len(x.Edited_AA) > 1 else None),axis=1)
 
 				VEP_df["New_AA_Prop"] = VEP_df.apply(
 					lambda x: aa_chem[x.New_AA] if x.New_AA is not None and x.New_AA != "*" and x.New_AA in aa_chem.keys()
-					else ("-".join([aa_chem[i] for i in x.New_AA if x.New_AA is not None and x.New_AA != "*" and
-									x.New_AA in aa_chem.keys()]) if len(x.New_AA) > 1 else None),axis=1)
+					else ("-".join([aa_chem[i] for i in x.New_AA])
+						  if x.New_AA is not None and x.New_AA != "*" and x.New_AA in aa_chem.keys()
+							 and len(x.New_AA) > 1 else None),axis=1)
 
 				VEP_df["Edited_Codon"] = VEP_df.apply(
 					lambda x: x.codons.split("/")[0]
