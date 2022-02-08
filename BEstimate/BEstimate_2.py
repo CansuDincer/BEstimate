@@ -720,7 +720,7 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 	for guide, g_df in edit_df.groupby(["gRNA_Target_Sequence"]):
 		unique_edits_per_guide = len(set(list(g_df["Edit_Location"])))
 		inds = list(edit_df[edit_df.gRNA_Target_Sequence == guide].index)
-		edit_df.at[inds, "# Edits/guide"] = unique_edits_per_guide
+		edit_df.loc[inds, "# Edits/guide"] = unique_edits_per_guide
 
 	return edit_df
 
