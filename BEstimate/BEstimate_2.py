@@ -927,6 +927,8 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 				if d["canonical"]:
 					transcript_id = transcript
 
+	print("VEP df is filling...")
+
 	# Decide the server
 	server = "http://grch37.rest.ensembl.org" if ensembl_object.assembly == "hg19" \
 		else "https://rest.ensembl.org"
@@ -1134,7 +1136,8 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 					lambda x: x.swissprot[0].split(".")[0] if x.swissprot is not None else False, axis=1)
 
 				VEP_df["is_clinical"] = VEP_df.apply(
-					lambda x: True if x.clinical_allele is not None else False, axis=1)
+					lambda x: True if x.clinical_allele is not None and type(x.clinical_allele) != float and
+									  pandas.isna(x.clinical_allele) is False else False, axis=1)
 
 				VEP_df["consequence_terms"] = VEP_df.apply(
 					lambda x: ";".join(x.consequence_terms) if type(x.consequence_terms) == list
@@ -1204,7 +1207,7 @@ def annotate_edits(ensembl_object, vep_df):
 						uniprot_object.extract_uniprot_info()
 						ptms, domains = list(), list()
 						for position in row["Protein_Position"].split(";"):
-							if position is not None:
+							if position is not None or position != "None" or type(position) != float:
 								if int(position) in seq_mapping[uniprot].keys():
 									dom = uniprot_object.find_domain(
 										seq_mapping[uniprot][int(position)], row["Edited_AA"])
@@ -1548,17 +1551,15 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 		if hgvs_df is not None and len(hgvs_df.index) != 0:
 			print("\nHGVS Data Frame was created!")
 			hgvs_df.to_csv(path + args["OUTPUT_FILE"] + "_hgvs_df.csv")
-			print("\nHGVS Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_hgvs_df.csv"))
+			print("HGVS Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_hgvs_df.csv"))
 		else:
-			print("\nHGVS Data Frame cannot be created because it is empty.")
+			print("HGVS Data Frame cannot be created because it is empty.")
 
 		whole_vep_df = retrieve_vep_info(hgvs_df = hgvs_df, ensembl_object = ensembl_obj, transcript_id=args["TRANSCRIPT"])
 		#if len(whole_vep_df.index) != 0:
-		print("\nVEP Data Frame was created!")
+		print("VEP Data Frame was created!")
 		whole_vep_df.to_csv(path + args["OUTPUT_FILE"] + "_vep_df.csv")
-		print("\nVEP Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_vep_df.csv"))
-		#else:
-		#	print("\nVEP Data Frame cannot be created because it is empty.")
+		print("VEP Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_vep_df.csv"))
 
 		if args["PROTEIN"]:
 			print("""\n
@@ -1573,11 +1574,11 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 				uniprot_df = annotate_edits(ensembl_object=ensembl_obj, vep_df=whole_vep_df)
 
 				if uniprot_df is not None and len(uniprot_df.index) != 0:
-					print("\nUniprot Data Frame was created!")
+					print("Uniprot Data Frame was created!")
 					uniprot_df.to_csv(path + args["OUTPUT_FILE"] + "_uniprot_df.csv")
-					print("\nUniprot Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +"_uniprot_df.csv"))
+					print("Uniprot Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +"_uniprot_df.csv"))
 				else:
-					print("\nUniprot Data Frame cannot be created because it is empty.")
+					print("Uniprot Data Frame cannot be created because it is empty.")
 
 
 			print("""\n
@@ -1593,18 +1594,18 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 				interaction_df = annotate_interface(annotated_edit_df=uniprot_df)
 
 				if interaction_df is not None and len(interaction_df.index) != 0:
-					print("\nAnnotation Data Frame was created!")
+					print("Annotation Data Frame was created!")
 
 					interaction_df.to_csv(path + args["OUTPUT_FILE"] + "_annotation_df.csv", index=False)
 
-					print("\nAnnotation Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +
-																				   "_annotation_df.csv"))
+					print("Annotation Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +
+																				 "_annotation_df.csv"))
 				else:
-					print("\nAnnotation Data Frame cannot be created because it is empty.")
+					print("Annotation Data Frame cannot be created because it is empty.")
 			else:
-				print("\nAnnotation Data Frame cannot be created because it is empty.")
+				print("Annotation Data Frame cannot be created because it is empty.")
 		else:
-			print("\nAnnotation Data Frame cannot be created because it is empty.")
+			print("Annotation Data Frame cannot be created because it is empty.")
 
 		return True
 
