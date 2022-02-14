@@ -890,7 +890,9 @@ def aa_names(aa_list, which):
 def protein_position_correction(protein_start, aa_list1, aa_list2):
 
 	if aa_list1 is not None and aa_list2 is not None:
-		if len(aa_list1) == 1 and len(aa_list2) == 1: return str(protein_start)
+		if len(aa_list1) == 1 and len(aa_list2) == 1:
+			if protein_start is not None: return str(protein_start)
+			else: return None
 		else:
 			diff_pos = aa_positions(aa_list1, aa_list2)
 			if diff_pos != "Inconsistency":
@@ -1072,7 +1074,7 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 
 				VEP_df["Protein_Position"] = VEP_df.apply(
 					lambda x: protein_position_correction(x.protein_start, x.amino_acids.split("/")[0], x.amino_acids.split("/")[1])
-					if x.amino_acids is not None and len(x.amino_acids.split("/")[0]) > 1 else str(x.protein_start), axis=1)
+					if x.amino_acids is not None and len(x.amino_acids.split("/")) > 1 else str(x.protein_start), axis=1)
 
 				VEP_df["Edited_AA"] = VEP_df.apply(
 					lambda x: aa_names(x.amino_acids.split("/")[0], "edited")
