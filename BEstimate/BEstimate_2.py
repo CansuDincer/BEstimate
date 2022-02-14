@@ -872,24 +872,32 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 	return hgvs_df
 
 
-def check_unequality_in_AA(aa_lis1, aa_lis2):
+def aa_positions(aa_lis1, aa_lis2):
 	diff_aa = list()
-	for i in range(len(aa_lis1)):
-		if aa_lis1[i] != aa_lis2[i]:
+	if len(aa_lis1) == len(aa_lis2):
+		for i in range(len(aa_lis1)):
 			diff_aa.append(i)
-	return diff_aa
+		return diff_aa
+	else:
+		return "Inconsistency"
+
+
+def aa_names(aa_list, which):
+	if which == "edited": return ",".join(aa_list)
+	elif which == "new": return ",".join(aa_list)
 
 
 def protein_position_correction(protein_start, aa_list1, aa_list2):
 
 	if aa_list1 is not None and aa_list2 is not None:
 		if len(aa_list1) == 1 and len(aa_list2) == 1: return str(protein_start)
-		elif len(check_unequality_in_AA(aa_list1, aa_list2)) == len(aa_list1):
-			return str(protein_start) + ":" + str(protein_start + len(aa_list1) - 1)
 		else:
-			diff_pos = check_unequality_in_AA(aa_list1, aa_list2)
-			diff_pos.sort()
-			return "-".join([str(protein_start + pos) for pos in diff_pos])
+			diff_pos = aa_positions(aa_list1, aa_list2)
+			if diff_pos != "Inconsistency":
+				diff_pos.sort()
+				return ",".join([str(protein_start + pos) for pos in diff_pos])
+			else:
+				return "Inconsistency"
 	else:
 		return None
 
@@ -907,7 +915,7 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 	aa_chem = {"G": "Non-Polar", "A": "Non-Polar", "V": "Non-Polar", "C": "Polar", "P": "Non-Polar",
 			   "L": "Non-Polar", "I": "Non-Polar", "M": "Non-Polar", "W": "Non-Polar", "F": "Non-Polar",
 			   "S": "Polar", "T": "Polar", "Y": "Polar", "N": "Polar", "Q": "Polar", "K": "Charged",
-			   "R": "Charged", "H": "Charged", "D": "Charged", "E": "Charged"}
+			   "R": "Charged", "H": "Charged", "D": "Charged", "E": "Charged", "*": "-"}
 
 	chromosome, strand = ensembl_object.chromosome, ensembl_object.strand
 
@@ -980,8 +988,34 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 				if "colocated_variants" in x.keys():
 					for c in x["colocated_variants"]:
 						vep_clinical_result = {}
-						if c["start"] == c["end"] and c["end"] == row.HGVS[-3] or \
-								str(c["start"]) + "_" + str(c["end"]) == row.HGVS.split("delins")[0]:
+						if c["start"] == c["end"] and c["end"] == row.HGVS[-3]:
+							vep_clinical_result["clinical_allele"] = c["allele_string"] \
+								if "allele_string" in c.keys() else None
+							vep_clinical_result["clinical_id"] = c["id"] if "id" in c.keys() else None
+
+							clinical_sig = ''
+							if "clin_sig" in c.keys():
+								for sig in c["clin_sig"]:
+									sig += ", "
+									clinical_sig += sig
+								if clinical_sig[-2:] == ", ": clinical_sig = clinical_sig[:-2]
+							else:
+								clinical_sig = None
+							vep_clinical_result["clinical_significance"] = clinical_sig
+							var_syns = ''
+							if "var_synonyms" in c.keys():
+								if type(c["var_synonyms"]) == str:
+									for clnv in c["var_synonyms"]:
+										clnv += ", "
+										var_syns += clnv
+									if var_syns != '' and var_syns[-2:] == ", ":
+										var_syns = var_syns[:-2]
+									elif var_syns == '':
+										var_syns = None
+							vep_clinical_result["var_synonyms"] = var_syns
+
+							vep_clinical_results.append(vep_clinical_result)
+						elif str(c["start"]) + "_" + str(c["end"]) == row.HGVS.split("delins")[0]:
 							vep_clinical_result["clinical_allele"] = c["allele_string"] \
 								if "allele_string" in c.keys() else None
 							vep_clinical_result["clinical_id"] = c["id"] if "id" in c.keys() else None
@@ -1064,10 +1098,10 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 
 				VEP_df["Protein_Position"] = VEP_df.apply(
 					lambda x: protein_position_correction(x.protein_start, x.amino_acids.split("/")[0], x.amino_acids.split("/")[1])
-					if x.amino_acids is not None and len(x.amino_acids.split("/")) > 1 else x.protein_start, axis=1)
+					if x.amino_acids is not None and len(x.amino_acids.split("/")) > 1 else str(x.protein_start), axis=1)
 
 				VEP_df["Edited_AA"] = VEP_df.apply(
-					lambda x: x.amino_acids.split("/")[0]
+					lambda x: aa_names(x.amino_acids.split("/")[0], "edited")
 					if x.amino_acids is not None and pandas.isna(x.amino_acids) is False and
 					   type(x.amino_acids) != float and len(x.amino_acids.split("/")) > 1
 					else (x.amino_acids.split("/")[0] if x.amino_acids is not None and pandas.isna(x.amino_acids) is False
@@ -1076,7 +1110,7 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 						  else None), axis=1)
 
 				VEP_df["New_AA"] = VEP_df.apply(
-					lambda x: x.amino_acids.split("/")[1]
+					lambda x: aa_names(x.amino_acids.split("/")[1], "new")
 					if x.amino_acids is not None and pandas.isna(x.amino_acids) is False and
 					   type(x.amino_acids) != float and len(x.amino_acids.split("/")) > 1 else (
 						x.amino_acids.split("/")[0] if x.amino_acids is not None and pandas.isna(x.amino_acids) is False and
@@ -1084,16 +1118,17 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 						else None), axis=1)
 
 				VEP_df["Edited_AA_Prop"] = VEP_df.apply(
-					lambda x: aa_chem[x.Edited_AA] if x.Edited_AA is not None and x.Edited_AA in aa_chem.keys() else
-					("-".join([aa_chem[i] for i in x.Edited_AA])
-					 if x.Edited_AA is not None and x.Edited_AA in aa_chem.keys()
-						and x.Edited_AA != "*" and len(x.Edited_AA) > 1 else None),axis=1)
+					lambda x: aa_chem[x.Edited_AA]
+					if x.Edited_AA is not None and x.Edited_AA in aa_chem.keys()
+					   and len(x.Edited_AA) == 1 else (
+						",".join([aa_chem[i] for i in x.Edited_AA.split(",") if i in aa_chem.keys()])
+					 if x.Edited_AA is not None and len(x.Edited_AA) > 1 else None),axis=1)
 
 				VEP_df["New_AA_Prop"] = VEP_df.apply(
-					lambda x: aa_chem[x.New_AA] if x.New_AA is not None and x.New_AA != "*" and x.New_AA in aa_chem.keys()
-					else ("-".join([aa_chem[i] for i in x.New_AA])
-						  if x.New_AA is not None and x.New_AA != "*" and x.New_AA in aa_chem.keys()
-							 and len(x.New_AA) > 1 else None),axis=1)
+					lambda x: aa_chem[x.New_AA]
+					if x.New_AA is not None and x.New_AA in aa_chem.keys() and len(x.New_AA) == 1 else (
+						"-".join([aa_chem[i] for i in x.New_AA.split(",") if i in aa_chem.keys()])
+						if x.New_AA is not None and len(x.New_AA) > 1 else None),axis=1)
 
 				VEP_df["Edited_Codon"] = VEP_df.apply(
 					lambda x: x.codons.split("/")[0]
@@ -1115,8 +1150,8 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 
 				VEP_df["is_Stop"] = VEP_df.apply(
 					lambda x: True if x.New_AA is not None and
-									  x.New_AA == "*"
-					else (True if x.New_AA is not None and "*" in x.New_AA
+									  x.New_AA == "*" and len(x.New_AA) == 1
+					else (True if x.New_AA is not None and "*" in x.New_AA and len(x.New_AA) > 1
 						  else (None if x.New_AA is None else False)), axis=1)
 
 				VEP_df["swissprot"] = VEP_df.apply(
@@ -1152,7 +1187,7 @@ def annotate_edits(ensembl_object, vep_df):
 	:param ensembl_object: The object of the Ensembl from Ensembl API
 	:param vep_df: The data frame filled with the information from VEP API
 	Ensembl Protein ID to Uniprot IDs (SwissProt/Reviewed)
-	:return: analysis_df: The data frame ensriched with the information from Uniprot API
+	:return: analysis_df: The data frame enriched with the information from Uniprot API
 	"""
 
 	analysis_dfs = list()
@@ -1165,61 +1200,64 @@ def annotate_edits(ensembl_object, vep_df):
 
 	if ensembl_seq_mapping != {}:
 		for ind, row in vep_df.iterrows():
-			if row.Protein_ID is not None and row.Protein_ID in ensembl_seq_mapping.keys() and ensembl_seq_mapping[row.Protein_ID] is not None and ensembl_seq_mapping[row.Protein_ID] != []:
+			if row.Protein_ID is not None and row.Protein_ID in ensembl_seq_mapping.keys() and \
+					ensembl_seq_mapping[row.Protein_ID] is not None and ensembl_seq_mapping[row.Protein_ID] != []:
 				seq_mapping = ensembl_seq_mapping[row.Protein_ID]
-				reviewed = list()
-				for uniprot in seq_mapping.keys():
-					uniprot_object = Uniprot(uniprotid=uniprot)
-					if uniprot_object.reviewed:
-						reviewed.append(uniprot)
 
-				uniprot_tbc = list()
-				if len(reviewed) > 0:
-					uniprot_tbc.extend(reviewed)
-
+				#reviewed = list()
+				if row["swissprot"] in seq_mapping.keys():
+					uniprot_tbc = [row["swissprot"]]
+					"""
 				else:
-					uniprot_tbc.extend(seq_mapping.keys())
+					for uniprot in seq_mapping.keys():
+						uniprot_object = Uniprot(uniprotid=uniprot)
+						if uniprot_object.reviewed:
+							reviewed.append(uniprot)
 
-				uniprot_info_dict = {}
-				for uniprot in uniprot_tbc:
-					uniprot_object = Uniprot(uniprotid=uniprot)
-					uniprot_object.extract_uniprot_info()
-					if row["Protein_Position"] in seq_mapping[uniprot].keys():
-						dom = uniprot_object.find_domain(
-							seq_mapping[uniprot][row["Protein_Position"]], row["Edited_AA"])
-						phos = uniprot_object.find_ptm_site(
-							"phosphorylation", seq_mapping[uniprot][row["Protein_Position"]],
-							row["Edited_AA"])
-						meth = uniprot_object.find_ptm_site(
-							"methylation", seq_mapping[uniprot][row["Protein_Position"]],
-							row["Edited_AA"])
-						ubi = uniprot_object.find_ptm_site(
-							"ubiquitination", seq_mapping[uniprot][row["Protein_Position"]],
-							row["Edited_AA"])
-						acet = uniprot_object.find_ptm_site(
-							"acetylation", seq_mapping[uniprot][row["Protein_Position"]],
-							row["Edited_AA"])
+					uniprot_tbc = list()
+					if len(reviewed) > 0:
+						uniprot_tbc.extend(reviewed)
 
-						uniprot_info_dict[uniprot] = {"domain": dom, "phosphorylation": phos,
-													  "methylation": meth, "ubiquitination": ubi,
-													  "acetylation": acet}
-
-						if dom is None and phos is None and meth is None and ubi is None and acet is None:
-							uniprot_info_dict[uniprot] = None
 					else:
-						uniprot_info_dict[uniprot] = None
+						uniprot_tbc.extend(seq_mapping.keys())
+				"""
+					for uniprot in uniprot_tbc:
+						# Only one SwissProt
+						uniprot_object = Uniprot(uniprotid=uniprot)
+						reviewed = uniprot_object.reviewed
+						uniprot_object.extract_uniprot_info()
+						ptms, domains = list(), list()
+						for position in row["Protein_Position"].split(","):
+							if int(position) in seq_mapping[uniprot].keys():
+								dom = uniprot_object.find_domain(
+									seq_mapping[uniprot][int(position)], row["Edited_AA"])
+								phos = uniprot_object.find_ptm_site(
+									"phosphorylation", seq_mapping[uniprot][int(position)],
+									row["Edited_AA"])
+								meth = uniprot_object.find_ptm_site(
+									"methylation", seq_mapping[uniprot][int(position)],
+									row["Edited_AA"])
+								ubi = uniprot_object.find_ptm_site(
+									"ubiquitination", seq_mapping[uniprot][int(position)],
+									row["Edited_AA"])
+								acet = uniprot_object.find_ptm_site(
+									"acetylation", seq_mapping[uniprot][int(position)],
+									row["Edited_AA"])
 
-				for uniprot, dom_ptm in uniprot_info_dict.items():
-					uniprot_object = Uniprot(uniprotid=uniprot)
-					reviewed = uniprot_object.reviewed
-					if dom_ptm is not None:
-						dom = dom_ptm["domain"]
-						ptm = ",".join([l for i,l in dom_ptm.items() if i != "domain" and l is not None])
-					else:
-						dom, ptm = None, None
+								if dom is not None: domains.append(dom + "-" + position)
+								if phos is not None: ptms.append(phos + "-" + position)
+								if meth is not None: ptms.append(meth + "-" + position)
+								if ubi is not None: ptms.append(ubi + "-" + position)
+								if acet is not None: ptms.append(acet + "-" + position)
 
+						if ptms: ptm = ",".join([i for i in ptms])
+						else: ptm = None
+						if domains: domain = ",".join([i for i in domains])
+						else: domain = None
+				else:
+					domain, ptm, uniprot, reviewed = None, None, None, None
 			else:
-				dom, ptm, uniprot, reviewed = None, None, None, None
+				domain, ptm, uniprot, reviewed = None, None, None, None
 
 
 			df_d = {"Hugo_Symbol": [row["Hugo_Symbol"]], "CRISPR_PAM_Sequence": [row["CRISPR_PAM_Sequence"]],
@@ -1240,7 +1278,7 @@ def annotate_edits(ensembl_object, vep_df):
 					"blosum62": [row["blosum62"]],"consequence_terms": [row["consequence_terms"]],
 					"is_clinical": [row["is_clinical"]], "clinical_allele": [row["clinical_allele"]],
 					"clinical_id": [row["clinical_id"]], "clinical_significance": [row["clinical_significance"]],
-					"Domain": [dom], "PTM": [ptm], "SwissProt_VEP": [row["swissprot"]], "Uniprot": [uniprot],
+					"Domain": [domain], "PTM": [ptm], "SwissProt_VEP": [row["swissprot"]], "Uniprot": [uniprot],
 					"Reviewed": [reviewed]}
 
 			df = pandas.DataFrame.from_dict(df_d)
@@ -1389,23 +1427,36 @@ def annotate_interface(annotated_edit_df):
 	for group, group_df in df.groupby(["Uniprot", "Protein_Position"]):
 		if group[1] is not None:
 			if group[0] in list(yulab.P1) or group[0] in list(yulab.P2):
-				pdb_partners, i3d_partners, eclair_partners = disrupt_interface(
-					uniprot=group[0], pos=int(group[1]))
-				if pdb_partners is not None:
+				all_pdb_partners, all_i3d_partners, all_eclair_partners = list(), list(), list()
+				if len(group[1].split(",")) == 1:
+					pdb_partners, i3d_partners, eclair_partners = disrupt_interface(
+						uniprot=group[0], pos=int(group[1]))
+					all_pdb_partners.extend(pdb_partners)
+					all_i3d_partners.extend(i3d_partners)
+					all_eclair_partners.extend(eclair_partners)
+				else:
+					for pos in group[1].split(","):
+						pdb_partners, i3d_partners, eclair_partners = disrupt_interface(
+							uniprot=group[0], pos=int(pos))
+						all_pdb_partners.extend(pdb_partners)
+						all_i3d_partners.extend(i3d_partners)
+						all_eclair_partners.extend(eclair_partners)
+
+				if all_pdb_partners is not None:
 					df.loc[list(group_df.index), "is_disruptive_interface_EXP"] = True
-					df.loc[list(group_df.index), "disrupted_PDB_int_partners"] = pdb_partners
+					df.loc[list(group_df.index), "disrupted_PDB_int_partners"] = all_pdb_partners
 				else:
 					df.loc[list(group_df.index), "is_disruptive_interface_EXP"] = False
 					df.loc[list(group_df.index), "disrupted_PDB_int_partners"] = None
-				if i3d_partners is not None:
+				if all_i3d_partners is not None:
 					df.loc[list(group_df.index), "is_disruptive_interface_MOD"] = True
-					df.loc[list(group_df.index), "disrupted_I3D_int_partners"] = i3d_partners
+					df.loc[list(group_df.index), "disrupted_I3D_int_partners"] = all_i3d_partners
 				else:
 					df.loc[list(group_df.index), "is_disruptive_interface_MOD"] = False
 					df.loc[list(group_df.index), "disrupted_I3D_int_partners"] = None
-				if eclair_partners is not None:
+				if all_eclair_partners is not None:
 					df.loc[list(group_df.index), "is_disruptive_interface_PRED"] = True
-					df.loc[list(group_df.index), "disrupted_Eclair_int_partners"] = eclair_partners
+					df.loc[list(group_df.index), "disrupted_Eclair_int_partners"] = all_eclair_partners
 				else:
 					df.loc[list(group_df.index), "is_disruptive_interface_PRED"] = False
 					df.loc[list(group_df.index), "disrupted_Eclair_int_partners"] = None
