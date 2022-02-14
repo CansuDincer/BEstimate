@@ -1179,14 +1179,15 @@ def annotate_edits(ensembl_object, vep_df):
 
 	if ensembl_seq_mapping != {}:
 		for ind, row in vep_df.iterrows():
+			uniprot, domain, ptm, reviewed = None, None, None, None
 			if row.Protein_ID is not None and row.Protein_ID in ensembl_seq_mapping.keys() and \
 					ensembl_seq_mapping[row.Protein_ID] is not None and ensembl_seq_mapping[row.Protein_ID] != []:
 				seq_mapping = ensembl_seq_mapping[row.Protein_ID]
 
-				#reviewed = list()
-				if row["swissprot"] in seq_mapping.keys():
+				reviewed = list()
+				if row["swissprot"] is not None and row["swissprot"] in seq_mapping.keys():
 					uniprot_tbc = [row["swissprot"]]
-					"""
+
 				else:
 					for uniprot in seq_mapping.keys():
 						uniprot_object = Uniprot(uniprotid=uniprot)
@@ -1197,9 +1198,10 @@ def annotate_edits(ensembl_object, vep_df):
 					if len(reviewed) > 0:
 						uniprot_tbc.extend(reviewed)
 
-					else:
-						uniprot_tbc.extend(seq_mapping.keys())
-				"""
+					#else:
+						# uniprot_tbc.extend(seq_mapping.keys())
+
+				if uniprot_tbc:
 					for uniprot in uniprot_tbc:
 						# Only one SwissProt
 						uniprot_object = Uniprot(uniprotid=uniprot)
@@ -1207,7 +1209,7 @@ def annotate_edits(ensembl_object, vep_df):
 						uniprot_object.extract_uniprot_info()
 						ptms, domains = list(), list()
 						for position in row["Protein_Position"].split(";"):
-							if position is not None or position != "None" or type(position) != float:
+							if position is not None and position != "None" and type(position) != float:
 								if int(position) in seq_mapping[uniprot].keys():
 									dom = uniprot_object.find_domain(
 										seq_mapping[uniprot][int(position)], row["Edited_AA"])
@@ -1229,16 +1231,8 @@ def annotate_edits(ensembl_object, vep_df):
 									if meth is not None: ptms.append(meth + "-" + position)
 									if ubi is not None: ptms.append(ubi + "-" + position)
 									if acet is not None: ptms.append(acet + "-" + position)
-							else:
-								domain, ptm, reviewed = None, None, None
 						if ptms: ptm = ";".join([i for i in ptms])
-						else: ptm = None
 						if domains: domain = ";".join([i for i in domains])
-						else: domain = None
-				else:
-					domain, ptm, reviewed = None, None, None
-			else:
-				domain, ptm, reviewed = None, None, None
 
 
 			df_d = {"Hugo_Symbol": [row["Hugo_Symbol"]], "CRISPR_PAM_Sequence": [row["CRISPR_PAM_Sequence"]],
@@ -1259,8 +1253,7 @@ def annotate_edits(ensembl_object, vep_df):
 					"blosum62": [row["blosum62"]],"consequence_terms": [row["consequence_terms"]],
 					"is_clinical": [row["is_clinical"]], "clinical_allele": [row["clinical_allele"]],
 					"clinical_id": [row["clinical_id"]], "clinical_significance": [row["clinical_significance"]],
-					"Domain": [domain], "PTM": [ptm], "SwissProt_VEP": [row["swissprot"]],
-					"Reviewed": [reviewed]}
+					"Domain": [domain], "PTM": [ptm], "SwissProt_VEP": [row["swissprot"]], "Uniprot": [uniprot]}
 
 			df = pandas.DataFrame.from_dict(df_d)
 			analysis_dfs.append(df)
@@ -1406,38 +1399,44 @@ def annotate_interface(annotated_edit_df):
 	df["disrupted_I3D_int_partners"] = None
 	df["disrupted_Eclair_int_partners"] = None
 	for group, group_df in df.groupby(["Uniprot", "Protein_Position"]):
-		if group[1] is not None:
+		if group[1] is not None and group[1] != "None" and pandas.isna(group[1]) == False:
 			if group[0] in list(yulab.P1) or group[0] in list(yulab.P2):
 				all_pdb_partners, all_i3d_partners, all_eclair_partners = list(), list(), list()
 				if len(group[1].split(";")) == 1:
 					pdb_partners, i3d_partners, eclair_partners = disrupt_interface(
 						uniprot=group[0], pos=int(group[1]))
-					all_pdb_partners.extend(pdb_partners)
-					all_i3d_partners.extend(i3d_partners)
-					all_eclair_partners.extend(eclair_partners)
+					if pdb_partners is not None:
+						all_pdb_partners.append(pdb_partners)
+					if i3d_partners is not None:
+						all_i3d_partners.append(i3d_partners)
+					if eclair_partners is not None:
+						all_eclair_partners.append(eclair_partners)
 				else:
 					for pos in group[1].split(";"):
 						pdb_partners, i3d_partners, eclair_partners = disrupt_interface(
 							uniprot=group[0], pos=int(pos))
-						all_pdb_partners.extend(pdb_partners)
-						all_i3d_partners.extend(i3d_partners)
-						all_eclair_partners.extend(eclair_partners)
+						if pdb_partners is not None:
+							all_pdb_partners.append(pdb_partners)
+						if i3d_partners is not None:
+							all_i3d_partners.append(i3d_partners)
+						if eclair_partners is not None:
+							all_eclair_partners.append(eclair_partners)
 
-				if all_pdb_partners is not None:
+				if all_pdb_partners:
 					df.loc[list(group_df.index), "is_disruptive_interface_EXP"] = True
-					df.loc[list(group_df.index), "disrupted_PDB_int_partners"] = all_pdb_partners
+					df.loc[list(group_df.index), "disrupted_PDB_int_partners"] = ";".join(all_pdb_partners)
 				else:
 					df.loc[list(group_df.index), "is_disruptive_interface_EXP"] = False
 					df.loc[list(group_df.index), "disrupted_PDB_int_partners"] = None
-				if all_i3d_partners is not None:
+				if all_i3d_partners:
 					df.loc[list(group_df.index), "is_disruptive_interface_MOD"] = True
-					df.loc[list(group_df.index), "disrupted_I3D_int_partners"] = all_i3d_partners
+					df.loc[list(group_df.index), "disrupted_I3D_int_partners"] = ";".join(all_i3d_partners)
 				else:
 					df.loc[list(group_df.index), "is_disruptive_interface_MOD"] = False
 					df.loc[list(group_df.index), "disrupted_I3D_int_partners"] = None
-				if all_eclair_partners is not None:
+				if all_eclair_partners:
 					df.loc[list(group_df.index), "is_disruptive_interface_PRED"] = True
-					df.loc[list(group_df.index), "disrupted_Eclair_int_partners"] = all_eclair_partners
+					df.loc[list(group_df.index), "disrupted_Eclair_int_partners"] = ";".join(all_eclair_partners)
 				else:
 					df.loc[list(group_df.index), "is_disruptive_interface_PRED"] = False
 					df.loc[list(group_df.index), "disrupted_Eclair_int_partners"] = None
@@ -1549,69 +1548,55 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 												  int(args["ACTWINDOW"].split("-")[1])])
 
 		if hgvs_df is not None and len(hgvs_df.index) != 0:
-			print("\nHGVS Data Frame was created!")
-			hgvs_df.to_csv(path + args["OUTPUT_FILE"] + "_hgvs_df.csv")
-			print("HGVS Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_hgvs_df.csv"))
-		else:
-			print("HGVS Data Frame cannot be created because it is empty.")
 
-		whole_vep_df = retrieve_vep_info(hgvs_df = hgvs_df, ensembl_object = ensembl_obj, transcript_id=args["TRANSCRIPT"])
-		#if len(whole_vep_df.index) != 0:
-		print("VEP Data Frame was created!")
-		whole_vep_df.to_csv(path + args["OUTPUT_FILE"] + "_vep_df.csv")
-		print("VEP Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_vep_df.csv"))
+			whole_vep_df = retrieve_vep_info(hgvs_df = hgvs_df, ensembl_object = ensembl_obj, transcript_id=args["TRANSCRIPT"])
+			if len(whole_vep_df.index) != 0:
+				print("VEP Data Frame was created!")
+				whole_vep_df.to_csv(path + args["OUTPUT_FILE"] + "_vep_df.csv")
+				print("VEP Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_vep_df.csv"))
+			else:
+				print("VEP Data Frame cannot be created because it is empty!")
 
-		if args["PROTEIN"]:
-			print("""\n
+			if args["PROTEIN"]:
+				print("""\n
 ------------------------------------------------------
                Edits - Uniprot Annotation
 ------------------------------------------------------
-        	\n""")
+				\n""")
 
-			print("Adding Uniprot ID, corresponding Domain and PTM information..\n")
+				print("Adding Uniprot ID, corresponding Domain and PTM information..\n")
 
-			if len(whole_vep_df.index) != 0:
-				uniprot_df = annotate_edits(ensembl_object=ensembl_obj, vep_df=whole_vep_df)
-
-				if uniprot_df is not None and len(uniprot_df.index) != 0:
-					print("Uniprot Data Frame was created!")
-					uniprot_df.to_csv(path + args["OUTPUT_FILE"] + "_uniprot_df.csv")
-					print("Uniprot Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +"_uniprot_df.csv"))
-				else:
-					print("Uniprot Data Frame cannot be created because it is empty.")
-
-
-			print("""\n
+				if len(whole_vep_df.index) != 0:
+					uniprot_df = annotate_edits(ensembl_object=ensembl_obj, vep_df=whole_vep_df)
+					print("Uniprot information was added!\n")
+				print("""\n
 ------------------------------------------------------
            Edits - 3D Interface Annotation
 ------------------------------------------------------
-                \n""")
+				\n""")
 
-			if uniprot_df is not None and len(uniprot_df.index) != 0:
+				if uniprot_df is not None and len(uniprot_df.index) != 0:
 
-				print("Adding affected interface and interacting partners..\n")
+					print("Adding affected interface and interacting partners..")
 
-				interaction_df = annotate_interface(annotated_edit_df=uniprot_df)
+					interaction_df = annotate_interface(annotated_edit_df=uniprot_df)
 
-				if interaction_df is not None and len(interaction_df.index) != 0:
-					print("Annotation Data Frame was created!")
+					if interaction_df is not None and len(interaction_df.index) != 0:
+						print("Annotation Data Frame was created!")
 
-					interaction_df.to_csv(path + args["OUTPUT_FILE"] + "_annotation_df.csv", index=False)
+						interaction_df.to_csv(path + args["OUTPUT_FILE"] + "_protein_df.csv", index=False)
 
-					print("Annotation Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +
-																				 "_annotation_df.csv"))
-				else:
-					print("Annotation Data Frame cannot be created because it is empty.")
-			else:
-				print("Annotation Data Frame cannot be created because it is empty.")
-		else:
-			print("Annotation Data Frame cannot be created because it is empty.")
+						print("Protein Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +
+																					 "_protein_df.csv"))
+					else:
+						print("Protein Data Frame cannot be created because it is empty.")
 
-		return True
+	return True
 
-	else:
-		return True
 
+
+###########################################################################################
+# Execution
 
 main()
 
