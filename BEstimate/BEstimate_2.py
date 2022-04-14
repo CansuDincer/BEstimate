@@ -99,6 +99,7 @@ class Uniprot:
 		self.ubiquitination_sites = dict()
 		self.methylation_sites = dict()
 		self.acetylation_sites = dict()
+		self.mutagenesis = dict()
 		self.server = "https://www.ebi.ac.uk/proteins/api/"
 
 	def extract_uniprot_info(self):
@@ -173,6 +174,40 @@ class Uniprot:
 					if old_aa == self.sequence[int(protein_edit_location) - 1]:
 						edit_ptm_site = ptm
 		return edit_ptm_site
+
+	def extract_mutagenesis(self):
+
+		mut_api = "features/%s?types=MUTAGEN" % self.uniprotid
+		mut_api_request = requests.get(self.server + mut_api,
+									   headers={"Accept": "application/json"})
+
+		# Check the response of the server for the request
+		if mut_api_request.status_code != 200:
+			return "No response from UniProt Mutagen!\n"
+
+		else:
+			if "features" in mut_api_request.json().keys():
+				if mut_api_request.json()["features"]:
+					for mut in mut_api_request.json()["features"]:
+						if mut["category"] == "MUTAGENESIS":
+							if mut["begin"] == mut["end"]:
+								self.mutagenesis[mut["begin"]] = {mut["alternativeSequence"] : [mut["description"]]}
+								if mut["alternativeSequence"] not in self.mutagenesis[mut["begin"]].keys():
+									self.mutagenesis[mut["begin"]][mut["alternativeSequence"]] = [mut["description"]]
+								else:
+									if mut["description"] not in self.mutagenesis[mut["begin"]][mut["alternativeSequence"]]:
+										self.mutagenesis[mut["begin"]][mut["alternativeSequence"]].append(mut["description"])
+
+	def find_mutagenesis(self, protein_edit_location, new_aa):
+
+		if str(protein_edit_location) in self.mutagenesis.keys():
+			mut = self.mutagenesis[str(protein_edit_location)]
+			if new_aa in mut.keys():
+				mutagenesis = mut[new_aa]
+				if len(mutagenesis) == 1:
+					return mutagenesis[0]
+				else:
+					return ";".join(mutagenesis)
 
 
 class Ensembl:
@@ -403,13 +438,33 @@ class Ensembl:
 
 	def extract_uniprot_info(self, ensembl_pid):
 
-		protein_ensembl = "/xrefs/id/{0}?external_db=Uniprot%".format(ensembl_pid)
+		protein_ensembl = "/xrefs/id/{0}?external_db=Uniprot/SWISSPROT%".format(ensembl_pid)
 		protein_request = requests.get(self.server + protein_ensembl,
 									   headers={"Content-Type": "application/json"})
 		if protein_request.status_code != 200:
 			print("No response from ensembl!")
 			return 0
 		else:
+			"""
+			Since some of the SwissProt object do not have xref mapping information 
+			We are missing SwissProt
+			Example : KRAS - ENSP00000308495 - 
+			{'ensembl_start': 1, 'description': 'V-Ki-ras2 Kirsten rat sarcoma viral oncogene homolog, isoform CRA_b ', 
+			'info_text': 'Generated via sequence_mapped', 'xref_end': 188, 'ensembl_identity': 100, 'info_type': 'SEQUENCE_MATCH',
+			 'ensembl_end': 188, 'xref_identity': 100, 'display_id': 'A0A024RAV5.49', 'dbname': 'Uniprot/SPTREMBL', 
+			 'synonyms': [], 'primary_id': 'A0A024RAV5', 'evalue': None, 'xref_start': 1, 'version': '49', 
+			 'cigar_line': '188M', 'db_display_name': 'UniProtKB/TrEMBL', 'score': 972}
+
+			{'description': 'GTPase KRas GTPase KRas, N-terminally processed', 'display_id': 'P01116.246', 
+			'info_text': 'Generated via direct', 'dbname': 'Uniprot/SWISSPROT', 'primary_id': 'P01116', 'synonyms': [], 
+			'info_type': 'DIRECT', 'version': '246', 'db_display_name': 'UniProtKB/Swiss-Prot'}
+			
+			{'info_type': 'DIRECT', 'db_display_name': 'UniProtKB isoform', 'version': '0', 'dbname': 'Uniprot_isoform', 
+			'display_id': 'P01116-2', 'info_text': '', 'description': None, 'synonyms': [], 'primary_id': 'P01116-2'}
+
+			We are loosing P01116 which was retrieved from VEP analysis too. 
+			
+			"""
 			seq_mapping = dict()
 			for i in protein_request.json():
 				uniprot = i["primary_id"]
@@ -430,11 +485,12 @@ class Ensembl:
 							seq_mapping[uniprot] = {i["ensembl_start"] + k: i["xref_start"] + k
 													for k in range(
 									int(i["ensembl_end"]) - int(i["ensembl_start"]) + 1)}
-
+			
 			if seq_mapping == dict():
 				return None
 			else:
 				return seq_mapping
+
 
 
 # -----------------------------------------------------------------------------------------#
@@ -1170,6 +1226,12 @@ def annotate_edits(ensembl_object, vep_df):
 	"""
 
 	analysis_dfs = list()
+
+	"""
+	Since some of the SwissProt object do not have xref mapping information 
+	We are missing SwissProt - No sequence mapping
+	"""
+
 	ensembl_seq_mapping = {}
 	for p in set(list(vep_df["Protein_ID"])):
 		if p is not None:
@@ -1183,11 +1245,10 @@ def annotate_edits(ensembl_object, vep_df):
 			if row.Protein_ID is not None and row.Protein_ID in ensembl_seq_mapping.keys() and \
 					ensembl_seq_mapping[row.Protein_ID] is not None and ensembl_seq_mapping[row.Protein_ID] != []:
 				seq_mapping = ensembl_seq_mapping[row.Protein_ID]
-
+				print(seq_mapping.keys())
 				reviewed = list()
 				if row["swissprot"] is not None and row["swissprot"] in seq_mapping.keys():
 					uniprot_tbc = [row["swissprot"]]
-
 				else:
 					for uniprot in seq_mapping.keys():
 						uniprot_object = Uniprot(uniprotid=uniprot)
@@ -1200,7 +1261,7 @@ def annotate_edits(ensembl_object, vep_df):
 
 					#else:
 						# uniprot_tbc.extend(seq_mapping.keys())
-
+		
 				if uniprot_tbc:
 					for uniprot in uniprot_tbc:
 						# Only one SwissProt
