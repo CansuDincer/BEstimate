@@ -782,14 +782,9 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 		edit_df.loc[edit_df.gRNA_Target_Sequence == guide, "# Edits/guide"] = unique_edits_per_guide
 
 	edit_df["Poly_T"] = False
-	t_count = 0
 	for guide, g_df in edit_df.groupby(["CRISPR_PAM_Sequence"]):
-		for nucleotide in guide:
-			if nucleotide == "T":
-				t_count += 1
-		if t_count >= 4:
+		if re.search("T{4,}$", guide) is not None:
 			edit_df.loc[list(edit_df[edit_df["CRISPR_PAM_Sequence"] == guide].index), "Poly_T"] = True
-
 	return edit_df
 
 
@@ -964,7 +959,7 @@ def extract_hgvsp(hgvsp, which):
 					# Synonymous variant
 					return aa_3to1[protein_change[:3]]
 				if which == "position":
-					return protein_change.split("=")[0][-3:]
+					return protein_change.split("=")[0][3:]
 
 		elif len(protein_change.split("delins")) > 1:
 			# Substitution
@@ -975,7 +970,9 @@ def extract_hgvsp(hgvsp, which):
 				return ";".join(aa1)
 
 			if which == "new_aa":
-				aa2 = [protein_change.split("delins")[1][x: x + 3] for x in range(0, len(protein_change.split("delins")[1]), 3)]
+				aa2 = list()
+				for i in [protein_change.split("delins")[1][x: x + 3] for x in range(0, len(protein_change.split("delins")[1]), 3)]:
+					aa2.append(aa_3to1[i])
 				return ";".join(aa2)
 
 			if which == "position":
@@ -1026,7 +1023,6 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 	all_vep_dfs = list()
 	for ind, row in hgvs_df.iterrows():
 		# VEP API request
-		print(row.HGVS)
 		vep = "/vep/human/hgvs/%s?Blosum62=1;Conservation=1;Mastermind=1;" \
 			  "LoF=1;CADD=1;protein=1;variant_class=1;hgvs=1;uniprot=1;transcript_id=%s" \
 			  % (row.HGVS, transcript_id)
@@ -1285,8 +1281,8 @@ def annotate_edits(ensembl_object, vep_df):
 			if row.Protein_ID is not None and row.Protein_ID in ensembl_seq_mapping.keys() and \
 					ensembl_seq_mapping[row.Protein_ID] is not None and ensembl_seq_mapping[row.Protein_ID] != []:
 				seq_mapping = ensembl_seq_mapping[row.Protein_ID]
-				print(seq_mapping.keys())
 				reviewed = list()
+				uniprot_tbc = list()
 				if row["swissprot"] is not None and row["swissprot"] in seq_mapping.keys():
 					uniprot_tbc = [row["swissprot"]]
 				else:
@@ -1308,32 +1304,34 @@ def annotate_edits(ensembl_object, vep_df):
 						uniprot_object = Uniprot(uniprotid=uniprot)
 						reviewed = uniprot_object.reviewed
 						uniprot_object.extract_uniprot_info()
-						ptms, domains = list(), list()
-						for position in row["Protein_Position"].split(";"):
-							if position is not None and position != "None" and type(position) != float:
-								if int(position) in seq_mapping[uniprot].keys():
-									dom = uniprot_object.find_domain(
-										seq_mapping[uniprot][int(position)], row["Edited_AA"])
-									phos = uniprot_object.find_ptm_site(
-										"phosphorylation", seq_mapping[uniprot][int(position)],
-										row["Edited_AA"])
-									meth = uniprot_object.find_ptm_site(
-										"methylation", seq_mapping[uniprot][int(position)],
-										row["Edited_AA"])
-									ubi = uniprot_object.find_ptm_site(
-										"ubiquitination", seq_mapping[uniprot][int(position)],
-										row["Edited_AA"])
-									acet = uniprot_object.find_ptm_site(
-										"acetylation", seq_mapping[uniprot][int(position)],
-										row["Edited_AA"])
+						print(row["Protein_Position"])
+						if row["Protein_Position"] is not None and pandas.isna(row["Protein_Position"]) is False:
+							ptms, domains = list(), list()
+							for position in str(row["Protein_Position"]).split(";"):
+								if position is not None and position != "None" and type(position) != float:
+									if int(position) in seq_mapping[uniprot].keys():
+										dom = uniprot_object.find_domain(
+											seq_mapping[uniprot][int(position)], row["Edited_AA"])
+										phos = uniprot_object.find_ptm_site(
+											"phosphorylation", seq_mapping[uniprot][int(position)],
+											row["Edited_AA"])
+										meth = uniprot_object.find_ptm_site(
+											"methylation", seq_mapping[uniprot][int(position)],
+											row["Edited_AA"])
+										ubi = uniprot_object.find_ptm_site(
+											"ubiquitination", seq_mapping[uniprot][int(position)],
+											row["Edited_AA"])
+										acet = uniprot_object.find_ptm_site(
+											"acetylation", seq_mapping[uniprot][int(position)],
+											row["Edited_AA"])
 
-									if dom is not None: domains.append(dom + "-" + position)
-									if phos is not None: ptms.append(phos + "-" + position)
-									if meth is not None: ptms.append(meth + "-" + position)
-									if ubi is not None: ptms.append(ubi + "-" + position)
-									if acet is not None: ptms.append(acet + "-" + position)
-						if ptms: ptm = ";".join([i for i in ptms])
-						if domains: domain = ";".join([i for i in domains])
+										if dom is not None: domains.append(dom + "-" + position)
+										if phos is not None: ptms.append(phos + "-" + position)
+										if meth is not None: ptms.append(meth + "-" + position)
+										if ubi is not None: ptms.append(ubi + "-" + position)
+										if acet is not None: ptms.append(acet + "-" + position)
+							if ptms: ptm = ";".join([i for i in ptms])
+							if domains: domain = ";".join([i for i in domains])
 
 			df_d = {"Hugo_Symbol": [row["Hugo_Symbol"]], "CRISPR_PAM_Sequence": [row["CRISPR_PAM_Sequence"]],
 					"CRISPR_PAM_Location": [row["CRISPR_PAM_Location"]],
@@ -1735,42 +1733,47 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
                 gRNAs - Targetable Sites
 ------------------------------------------------------
     \n""")
-
-	crispr_df = extract_grna_sites(hugo_symbol=args["GENE"], searched_nucleotide=args["EDIT"],
-								   pam_window=[int(args["PAMWINDOW"].split("-")[0]),
-											   int(args["PAMWINDOW"].split("-")[1])],
-								   activity_window=[int(args["ACTWINDOW"].split("-")[0]),
-													int(args["ACTWINDOW"].split("-")[1])],
-								   pam_sequence=args["PAMSEQ"], protospacer_length=args["PROTOLEN"],
-								   ensembl_object=ensembl_obj)
-
 	path = ""
 	if args["OUTPUT_PATH"][-1] == "/":
 		path = args["OUTPUT_PATH"]
 	else:
 		path = args["OUTPUT_PATH"] + "/"
 
-	if len(crispr_df.index) != 0: print("CRISPR Data Frame was created!")
-	crispr_df.to_csv(path + args["OUTPUT_FILE"] + "_crispr_df.csv", index=False)
+	if args["OUTPUT_FILE"] + "_crispr_df.csv" not in os.listdir(path):
+		crispr_df = extract_grna_sites(hugo_symbol=args["GENE"], searched_nucleotide=args["EDIT"],
+									   pam_window=[int(args["PAMWINDOW"].split("-")[0]),
+												   int(args["PAMWINDOW"].split("-")[1])],
+									   activity_window=[int(args["ACTWINDOW"].split("-")[0]),
+														int(args["ACTWINDOW"].split("-")[1])],
+									   pam_sequence=args["PAMSEQ"], protospacer_length=args["PROTOLEN"],
+									   ensembl_object=ensembl_obj)
 
-	print("CRISPR Data Frame was written in %s as %s\n" % (path, args["OUTPUT_FILE"] + "_crispr_df.csv"))
+		if len(crispr_df.index) != 0: print("CRISPR Data Frame was created!")
+		crispr_df.to_csv(path + args["OUTPUT_FILE"] + "_crispr_df.csv", index=False)
 
+		print("CRISPR Data Frame was written in %s as %s\n" % (path, args["OUTPUT_FILE"] + "_crispr_df.csv"))
+
+	else:
+		crispr_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_crispr_df.csv")
 	print("""\n
 ------------------------------------------------------
                gRNAs - Editable Sites
 ------------------------------------------------------
     \n""")
+	if args["OUTPUT_FILE"] + "_edit_df.csv" not in os.listdir(path):
+		edit_df = find_editable_nucleotide(crispr_df=crispr_df, searched_nucleotide=args["EDIT"],
+										   activity_window=[int(args["ACTWINDOW"].split("-")[0]),
+															int(args["ACTWINDOW"].split("-")[1])],
+										   ensembl_object=ensembl_obj)
 
-	edit_df = find_editable_nucleotide(crispr_df=crispr_df, searched_nucleotide=args["EDIT"],
-									   activity_window=[int(args["ACTWINDOW"].split("-")[0]),
-														int(args["ACTWINDOW"].split("-")[1])],
-									   ensembl_object=ensembl_obj)
+		if len(edit_df.index) != 0: print("Edit Data Frame was created!")
 
-	if len(edit_df.index) != 0: print("Edit Data Frame was created!")
+		edit_df.to_csv(path + args["OUTPUT_FILE"] + "_edit_df.csv", index=False)
 
-	edit_df.to_csv(path + args["OUTPUT_FILE"] + "_edit_df.csv", index=False)
+		print("Edit Data Frame was written in %s as %s" % (path, args["OUTPUT_FILE"] + "_edit_df.csv\n"))
 
-	print("Edit Data Frame was written in %s as %s" % (path, args["OUTPUT_FILE"] + "_edit_df.csv\n"))
+	else:
+		edit_df =pandas.read_csv(path + args["OUTPUT_FILE"] + "_edit_df.csv")
 
 	if args["VEP"]:
 		print("""\n
@@ -1778,78 +1781,80 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
                Edits - VEP Annotation
 ------------------------------------------------------
         \n""")
+		if args["OUTPUT_FILE"] + "_vep_df.csv" not in os.listdir(path):
+			hgvs_df = extract_hgvs(edit_df=edit_df, ensembl_object=ensembl_obj,
+								   transcript_id=args["TRANSCRIPT"],
+								   edited_nucleotide=args["EDIT"], new_nucleotide=args["EDIT_TO"],
+								   activity_window=[int(args["ACTWINDOW"].split("-")[0]),
+													int(args["ACTWINDOW"].split("-")[1])])
 
-		hgvs_df = extract_hgvs(edit_df=edit_df, ensembl_object=ensembl_obj,
-							   transcript_id=args["TRANSCRIPT"],
-							   edited_nucleotide=args["EDIT"], new_nucleotide=args["EDIT_TO"],
-							   activity_window=[int(args["ACTWINDOW"].split("-")[0]),
-												int(args["ACTWINDOW"].split("-")[1])])
+			if hgvs_df is not None and len(hgvs_df.index) != 0:
 
-		if hgvs_df is not None and len(hgvs_df.index) != 0:
-
-			whole_vep_df = retrieve_vep_info(hgvs_df=hgvs_df, ensembl_object=ensembl_obj,
-											 transcript_id=args["TRANSCRIPT"])
-			if len(whole_vep_df.index) != 0:
-				print("VEP Data Frame was created!")
-				whole_vep_df.to_csv(path + args["OUTPUT_FILE"] + "_vep_df.csv")
-				print("VEP Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_vep_df.csv"))
-			else:
-				print("VEP Data Frame cannot be created because it is empty!")
-
-			if args["PROTEIN"]:
-				print("""\n
-------------------------------------------------------
-               Edits - Uniprot Annotation
-------------------------------------------------------
-				\n""")
-
-				print("Adding Uniprot ID, corresponding Domain and PTM information..\n")
-
+				whole_vep_df = retrieve_vep_info(hgvs_df=hgvs_df, ensembl_object=ensembl_obj,
+												 transcript_id=args["TRANSCRIPT"])
 				if len(whole_vep_df.index) != 0:
-					uniprot_df = annotate_edits(ensembl_object=ensembl_obj, vep_df=whole_vep_df)
-					print("Uniprot information was added!\n")
+					print("VEP Data Frame was created!")
+					whole_vep_df.to_csv(path + args["OUTPUT_FILE"] + "_vep_df.csv")
+					print("VEP Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_vep_df.csv"))
+				else:
+					print("VEP Data Frame cannot be created because it is empty!")
+		else:
+			whole_vep_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_vep_df.csv")
+
+		if args["PROTEIN"]:
+			print("""\n
+------------------------------------------------------
+		   Edits - Uniprot Annotation
+------------------------------------------------------
+			\n""")
+
+			print("Adding Uniprot ID, corresponding Domain and PTM information..\n")
+
+			if len(whole_vep_df.index) != 0:
+				uniprot_df = annotate_edits(ensembl_object=ensembl_obj, vep_df=whole_vep_df)
+				print("Uniprot information was added!\n")
+			print("""\n
+------------------------------------------------------
+	   Edits - 3D Interface Annotation
+------------------------------------------------------
+			\n""")
+
+			if uniprot_df is not None and len(uniprot_df.index) != 0:
+
+				print("Adding affected interface and interacting partners..")
+
+				interaction_df = annotate_interface(annotated_edit_df=uniprot_df)
+
+				if interaction_df is not None and len(interaction_df.index) != 0:
+					print("Annotation Data Frame was created!")
+
+					interaction_df.to_csv(path + args["OUTPUT_FILE"] + "_protein_df.csv", index=False)
+
+					print("Protein Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +
+																			  "_protein_df.csv"))
+				else:
+					print("Protein Data Frame cannot be created because it is empty.")
+
 				print("""\n
 ------------------------------------------------------
-           Edits - 3D Interface Annotation
+				Summary Data Frame 
 ------------------------------------------------------
 				\n""")
 
-				if uniprot_df is not None and len(uniprot_df.index) != 0:
+				if interaction_df is not None and len(interaction_df.index) != 0:
+					print("Summarising information..")
 
-					print("Adding affected interface and interacting partners..")
+					summary_df = summarise_guides(last_df=interaction_df)
 
-					interaction_df = annotate_interface(annotated_edit_df=uniprot_df)
+					if summary_df is not None and len(summary_df.index) != 0:
+						print("Summary Data Frame was created!")
 
-					if interaction_df is not None and len(interaction_df.index) != 0:
-						print("Annotation Data Frame was created!")
+						summary_df.to_csv(path + args["OUTPUT_FILE"] + "_summary_df.csv", index=False)
 
-						interaction_df.to_csv(path + args["OUTPUT_FILE"] + "_protein_df.csv", index=False)
-
-						print("Protein Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +
-																				  "_protein_df.csv"))
+						print("Summary Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +
+																				  "_summary_df.csv"))
 					else:
-						print("Protein Data Frame cannot be created because it is empty.")
-
-					print("""\n
-	------------------------------------------------------
-	           		Summary Data Frame 
-	------------------------------------------------------
-					\n""")
-
-					if interaction_df is not None and len(interaction_df.index) != 0:
-						print("Summarising information..")
-
-						summary_df = summarise_guides(last_df=interaction_df)
-
-						if summary_df is not None and len(summary_df.index) != 0:
-							print("Summary Data Frame was created!")
-
-							summary_df.to_csv(path + args["OUTPUT_FILE"] + "_summary_df.csv", index=False)
-
-							print("Summary Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +
-																					  "_summary_df.csv"))
-						else:
-							print("Summary Data Frame cannot be created because it is empty.")
+						print("Summary Data Frame cannot be created because it is empty.")
 
 
 	return True
