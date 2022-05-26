@@ -781,6 +781,15 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 		unique_edits_per_guide = len(set(list(g_df["Edit_Location"])))
 		edit_df.loc[edit_df.gRNA_Target_Sequence == guide, "# Edits/guide"] = unique_edits_per_guide
 
+	edit_df["Poly_T"] = False
+	t_count = 0
+	for guide, g_df in edit_df.groupby(["CRISPR_PAM_Sequence"]):
+		for nucleotide in guide:
+			if nucleotide == "T":
+				t_count += 1
+		if t_count >= 4:
+			edit_df.loc[list(edit_df[edit_df["CRISPR_PAM_Sequence"] == guide].index), "Poly_T"] = True
+
 	return edit_df
 
 
