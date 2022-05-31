@@ -65,7 +65,7 @@ def take_input():
 	parser.add_argument("-mutation", dest="MUTATION", default=None,
 						help="The mutation on the interested gene that you need to integrate "
 							 "into guide and/or annotation analysis")
-	parser.add_argument("-mutation_file", dest="MUTATION_FILE", default=None,
+	parser.add_argument("-mutation_file", dest="MUTATION_FILE", default=None, type=argparse.FileType('r'),
 						help="If you have more than one mutations, a file for the mutations on the "
 							 "interested gene that you need to integrate into guide and/or annotation analysis")
 
@@ -92,7 +92,6 @@ def take_input():
 
 
 args = take_input()
-
 
 # -----------------------------------------------------------------------------------------#
 # Objects from APIs
@@ -324,24 +323,29 @@ class Ensembl:
 				if mutation.split(":")[0] == self.chromosome:
 					if mutation.split(":")[1].split(".")[0] == "g":
 						alteration = mutation.split(":")[1].split(".")[1]
-						mutation_location = re.match("([0-9]+)([a-z]+)", alteration.split(">")[0], re.I).groups()[0]
+						mutation_location = int(re.match("([0-9]+)([a-z]+)", alteration.split(">")[0], re.I).groups()[0])
 						altered_nuc = re.match("([0-9]+)([a-z]+)", alteration.split(">")[0], re.I).groups()[1]
 						new_nuc = alteration.split(">")[1]
 
 						# Check if altered nucleotide is in the given location
 						if self.strand == 1:
-							genomic_start = self.gene_range[0]
-							genomic_flan_start = self.flan_gene_range[0]
+							genomic_start = int(self.gene_range[0])
+							genomic_flan_start = int(self.flan_gene_range[0])
+
 							if self.sequence[mutation_location - genomic_start] == altered_nuc:
 								# Altered nucleotide in the given mutation fits with the sequence
-								self.sequence[mutation_location - genomic_start] = new_nuc
+								s = list(self.sequence)
+								s[mutation_location - genomic_start] = new_nuc
+								self.sequence = "".join(s)
 							else:
 								print("\nGiven mutation location does not fit with the sequence."
 									  "Nucleotides are different.\n")
 
 							if self.flan_sequence[mutation_location - genomic_flan_start] == altered_nuc:
 								# Altered nucleotide in the given mutation fits with the sequence
-								self.flan_sequence[mutation_location - genomic_flan_start] = new_nuc
+								s = list(self.flan_sequence)
+								s[mutation_location - genomic_flan_start] = new_nuc
+								self.flan_sequence = "".join(s)
 							else:
 								print("\nGiven mutation location does not fit with the sequence."
 									  "Nucleotides are different.\n")
@@ -354,21 +358,25 @@ class Ensembl:
 								[nucleotide_dict[n] for n in self.flan_sequence[::-1]])
 
 						elif self.strand == -1:
-							genomic_end = self.gene_range[0]
-							genomic_flan_end = self.flan_gene_range[0]
+							genomic_end = int(self.gene_range[1])
+							genomic_flan_end = int(self.flan_gene_range[1])
 
-							if self.sequence[mutation_location - genomic_end] == altered_nuc:
+							if self.sequence[genomic_end - (mutation_location + 1)] == altered_nuc:
 								# Altered nucleotide in the given mutation fits with the sequence
-								self.sequence[mutation_location - genomic_end] = new_nuc
+								s = list(self.sequence)
+								s[genomic_end - (mutation_location + 1)] = new_nuc
+								self.sequence = "".join(s)
 							else:
 								print("\nGiven mutation location does not fit with the sequence."
-									  "Nucleotides are different.\n")
-							if self.flan_sequence[mutation_location - genomic_flan_end] == altered_nuc:
+									  "\nNucleotides are different.\n")
+							if self.flan_sequence[genomic_flan_end - (mutation_location + 1)] == altered_nuc:
 								# Altered nucleotide in the given mutation fits with the sequence
-								self.flan_sequence[mutation_location - genomic_flan_end] = new_nuc
+								s = list(self.flan_sequence)
+								s[genomic_flan_end - (mutation_location + 1)] = new_nuc
+								self.flan_sequence = "".join(s)
 							else:
 								print("\nGiven mutation location does not fit with the sequence."
-									  "Nucleotides are different.\n")
+									  "\nNucleotides are different.\n")
 
 							self.left_sequence_analysis = self.sequence
 							self.flan_left_sequence_analysis = self.flan_sequence
@@ -776,7 +784,6 @@ def collect_mutation_location(mutations):
 
 def check_genome_for_mutation(genomic_range, direction, mutations):
 
-	locations = collect_mutation_location(mutations)
 	yes_mutation = False
 
 	if direction == "left":
@@ -787,7 +794,7 @@ def check_genome_for_mutation(genomic_range, direction, mutations):
 		end = int(genomic_range.split("-")[1])
 		start = int(genomic_range.split("-")[0])
 
-	for loc in locations:
+	for loc in mutations:
 		if start <= loc <= end:
 			yes_mutation = True
 	return yes_mutation
@@ -908,6 +915,7 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 	:param edited_nucleotide: The interested nucleotide which will be changed with BE.
 	:param new_nucleotide: The new nucleotide which will be changed to with BE.
 	:param activity_window: The location of the activity window on the protospacer sequence.
+	:param mutations: Given mutation list from the user
 	:return hgvs_df: The HGVS notations of all possible variants
 	"""
 	# For (-) direction crisprs, base reversion should be done.
@@ -1326,17 +1334,18 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 			na_df = pandas.DataFrame(
 				[[row.Hugo_Symbol, row.CRISPR_PAM_Sequence, row.CRISPR_PAM_Location, row.gRNA_Target_Sequence,
 				  row.gRNA_Target_Location, row.Edit_Location, row.Edit_Type, row.Direction, row.Transcript_ID,
-				  row.Exon_ID, None, None, None, None, None, None, None, None, None, None, None,
+				  row.Exon_ID, row.guide_on_mutation, row.guide_change_mutation, None, None, None, None, None, None,
 				  None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None,
-				  None, None, None, None]],
+				  None, None, None, None, None, None, None, None, None]],
 				columns=["Hugo_Symbol", "CRISPR_PAM_Sequence", "CRISPR_PAM_Location", "gRNA_Target_Sequence",
 						 "gRNA_Target_Location", "Edit_Position", "Edit_Type", "Direction", "Transcript_ID",
-						 "Exon_ID", "Protein_ID", "VEP_input", "variant_classification", "cDNA_Change",
-						 "Edited_Codon", "New_Codon", "Protein_Position", "Protein_Change", "Edited_AA",
-						 "Edited_AA_Prop", "New_AA", "New_AA_Prop", "is_Synonymous", "is_Stop", "proline_addition",
-						 "swissprot", "polyphen_score", "polyphen_prediction", "sift_score", "sift_prediction", "cadd_phred",
-						 "cadd_raw", "lof", "impact", "blosum62", "consequence_terms", "is_clinical", "clinical_allele",
-						 "clinical_id", "clinical_significance", "var_synonyms"])
+						 "Exon_ID", "guide_on_mutation", "guide_change_mutation", "Protein_ID", "VEP_input",
+						 "variant_classification", "cDNA_Change", "Edited_Codon", "New_Codon", "Protein_Position",
+						 "Protein_Change", "Edited_AA", "Edited_AA_Prop", "New_AA", "New_AA_Prop", "is_Synonymous",
+						 "is_Stop", "proline_addition", "swissprot", "polyphen_score", "polyphen_prediction",
+						 "sift_score", "sift_prediction", "cadd_phred", "cadd_raw", "lof", "impact", "blosum62",
+						 "consequence_terms", "is_clinical", "clinical_allele", "clinical_id", "clinical_significance",
+						 "var_synonyms"])
 			vep_dfs.append(na_df)
 
 		else:
@@ -2101,11 +2110,22 @@ def main():
 	else:
 		protein = False
 
+	if args["MUTATION"]:
+		mutations = [args["MUTATION"]]
+	else:
+		if args["MUTATION_FILE"]:
+			mutations = list()
+			for line in args["MUTATION_FILE"].readlines():
+				mutations.append(line.strip())
+		else:
+			mutations = None
+
+
 	print("""
 The given arguments are:\nGene: %s\nAssembl: %s\nEnsembl transcript ID: %s\nPAM sequence: %s\nPAM window: %s
-Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleotide: %s\nVEP and Uniprot analysis: %s """
+Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleotide: %s\nVEP and Uniprot analysis: %s\nMutation on genome: %s """
 		  % (args["GENE"], args["ASSEMBLY"], args["TRANSCRIPT"], args["PAMSEQ"], args["PAMWINDOW"], args["PROTOLEN"],
-			 args["ACTWINDOW"], args["EDIT"], args["EDIT_TO"], protein))
+			 args["ACTWINDOW"], args["EDIT"], args["EDIT_TO"], protein, mutations))
 
 	print("""\n
 ------------------------------------------------------ 
@@ -2118,7 +2138,10 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 
 	if ensembl_obj.gene_id == '': sys.exit("No corresponding Ensembl Gene ID could be found!")
 
-	ensembl_obj.extract_sequence(ensembl_obj.gene_id)
+	if mutations:
+		ensembl_obj.extract_sequence(ensembl_obj.gene_id, mutations=mutations)
+	else:
+		ensembl_obj.extract_sequence(ensembl_obj.gene_id)
 
 	if ensembl_obj.gene_range[0] < ensembl_obj.gene_range[1]:
 		ensembl_obj.extract_info(chromosome=ensembl_obj.chromosome,
@@ -2165,7 +2188,7 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 		edit_df = find_editable_nucleotide(crispr_df=crispr_df, searched_nucleotide=args["EDIT"],
 										   activity_window=[int(args["ACTWINDOW"].split("-")[0]),
 															int(args["ACTWINDOW"].split("-")[1])],
-										   ensembl_object=ensembl_obj)
+										   ensembl_object=ensembl_obj, mutations=mutations)
 
 		if len(edit_df.index) != 0: print("Edit Data Frame was created!")
 
@@ -2187,7 +2210,8 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 								   transcript_id=args["TRANSCRIPT"],
 								   edited_nucleotide=args["EDIT"], new_nucleotide=args["EDIT_TO"],
 								   activity_window=[int(args["ACTWINDOW"].split("-")[0]),
-													int(args["ACTWINDOW"].split("-")[1])])
+													int(args["ACTWINDOW"].split("-")[1])],
+								   mutations=mutations)
 
 			if hgvs_df is not None and len(hgvs_df.index) != 0:
 

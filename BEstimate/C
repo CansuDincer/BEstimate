@@ -1,0 +1,51 @@
+library
+arguments
+functions
+
+------------------------------------------------------                                                                                         
+                B E s t i m a t e                                      
+
+            Wellcome Sanger Institute                                  
+------------------------------------------------------
+    
+
+The given arguments are:
+Gene: BRAF
+Assembl: GRCh38
+Ensembl transcript ID: None
+PAM sequence: NGG
+PAM window: 21-23
+Protospacer length: 20
+Activity window: 4-8
+Edited nucleotide: C
+New nucleotide: T
+VEP and Uniprot analysis: True
+Mutation on genome: ['7:g.140719506T'] 
+
+
+------------------------------------------------------ 
+              Ensembl Gene Information
+------------------------------------------------------ 
+    
+
+Request to Ensembl REST API for Ensembl Gene ID:
+Ensembl Gene ID: ENSG00000157764
+
+Request to Ensembl REST API for sequence information:
+The location of the interested gene: chromosome:GRCh38:7:140719327:140924929:-1
+
+
+
+------------------------------------------------------
+                gRNAs - Targetable Sites
+------------------------------------------------------
+    
+
+
+
+------------------------------------------------------
+               gRNAs - Editable Sites
+------------------------------------------------------
+    
+
+Edit df is filling...
