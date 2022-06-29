@@ -771,15 +771,18 @@ def extract_grna_sites(hugo_symbol, pam_sequence, searched_nucleotide,
 
 
 def collect_mutation_location(mutations):
-	locations = list()
-	for mutation in mutations:
-		alteration = mutation.split(":")[1].split(".")[1]
-		mutation_location = re.match("([0-9]+)([a-z]+)", alteration.split(">")[0], re.I).groups()[0]
-		if int(mutation_location) not in locations:
-			locations.append(int(mutation_location))
-	if locations:
-		return locations
-	else: return None
+	if mutations:
+		locations = list()
+		for mutation in mutations:
+			alteration = mutation.split(":")[1].split(".")[1]
+			mutation_location = re.match("([0-9]+)([a-z]+)", alteration.split(">")[0], re.I).groups()[0]
+			if int(mutation_location) not in locations:
+				locations.append(int(mutation_location))
+		if locations:
+			return locations
+		else: return None
+	else:
+		return None
 
 
 def check_genome_for_mutation(genomic_range, direction, mutations):
@@ -794,10 +797,13 @@ def check_genome_for_mutation(genomic_range, direction, mutations):
 		end = int(genomic_range.split("-")[1])
 		start = int(genomic_range.split("-")[0])
 
-	for loc in mutations:
-		if start <= loc <= end:
-			yes_mutation = True
-	return yes_mutation
+	if mutations:
+		for loc in mutations:
+			if start <= loc <= end:
+				yes_mutation = True
+		return yes_mutation
+	else:
+		return yes_mutation
 
 
 def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
@@ -900,7 +906,7 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 											direction=x.Direction, mutations=mutation_locations), axis=1)
 
 	edit_df["guide_change_mutation"] = edit_df.apply(
-		lambda x: True if int(x.Edit_Location) in mutation_locations else False, axis=1)
+		lambda x: True if mutation_locations is not None and int(x.Edit_Location) in mutation_locations else False, axis=1)
 
 	return edit_df
 
