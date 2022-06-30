@@ -1271,6 +1271,7 @@ def extract_hgvsp(hgvsp, which):
 		if len(protein_change.split("delins")) == 1:
 			# SNP
 			if len(protein_change.split("=")) == 1:
+				print(protein_change)
 				if which == "old_aa":
 					return aa_3to1[protein_change[:3]]
 				if which == "new_aa":
