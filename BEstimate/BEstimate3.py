@@ -283,6 +283,7 @@ class Ensembl:
 
 		# Sequence
 		label_line = seq_request.text.split("\n")[0]
+		print(label_line)
 		print("The location of the interested gene: %s\n" % label_line.split(" ")[1])
 		flan_label_line = seq_flan_request.text.split("\n")[0]
 		self.sequence = "".join(seq_request.text.split("\n")[1:])
