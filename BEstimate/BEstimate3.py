@@ -1268,16 +1268,26 @@ def extract_hgvsp(hgvsp, which):
 	if hgvsp is not None:
 		ensembl_protein = hgvsp.split(":p.")[0].split(".")[0]
 		protein_change = hgvsp.split("p.")[1]
-		print(protein_change)
 		if len(protein_change.split("delins")) == 1:
 			# SNP
 			if len(protein_change.split("=")) == 1:
-				if which == "old_aa":
-					return aa_3to1[protein_change[:3]]
-				if which == "new_aa":
-					return aa_3to1[protein_change[-3:]]
-				if which == "position":
-					return protein_change[3:-3]
+				if len(protein_change.split("?")) == 1:
+					if which == "old_aa":
+						return aa_3to1[protein_change[:3]]
+					if which == "new_aa":
+						return aa_3to1[protein_change[-3:]]
+					if which == "position":
+						return protein_change[3:-3]
+				else:
+					# Start codon lost - Met1?
+					if which == "old_aa":
+						return aa_3to1[protein_change[:3]]
+					if which == "new_aa":
+						if protein_change[-1] == "?":
+							return "-"
+					if which == "position":
+						return protein_change[3]
+
 			else:
 				if which == "old_aa":
 					# Synonymous variant
