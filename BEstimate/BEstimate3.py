@@ -1268,10 +1268,10 @@ def extract_hgvsp(hgvsp, which):
 	if hgvsp is not None:
 		ensembl_protein = hgvsp.split(":p.")[0].split(".")[0]
 		protein_change = hgvsp.split("p.")[1]
+		print(protein_change)
 		if len(protein_change.split("delins")) == 1:
 			# SNP
 			if len(protein_change.split("=")) == 1:
-				print(protein_change)
 				if which == "old_aa":
 					return aa_3to1[protein_change[:3]]
 				if which == "new_aa":
@@ -2095,10 +2095,15 @@ def summarise_guides(last_df):
 													 if x is not None and type(x) != float])
 		summary_df.loc[i, "clinical_significance"] = ";".join([x for x in list(guide_df.clinical_significance.unique())
 															   if x is not None and type(x) != float])
-		summary_df.loc[i, "Domain"] = ";".join([x for x in list(guide_df.Domain.unique())
-												if x is not None and type(x) != float])
-		summary_df.loc[i, "PTM"] = ";".join([x for x in list(guide_df.PTM.unique())
-											 if x is not None and type(x) != float])
+		if guide_df.Domain.unique() is not None:
+			summary_df.loc[i, "Domain"] = ";".join([x for x in list(guide_df.Domain.unique()) if x is not None and type(x) != float])
+		else:
+			summary_df.loc[i, "PTMDomain"] = None
+
+		if guide_df.PTM.unique() is not None:
+			summary_df.loc[i, "PTM"] = ";".join([x for x in list(guide_df.PTM.unique()) if x is not None and type(x) != float])
+		else:
+			summary_df.loc[i, "PTM"] = None
 		summary_df.loc[i, "SwissProt_VEP"] = ";".join([x for x in list(guide_df.SwissProt_VEP.unique())
 													   if x is not None and type(x) != float])
 		summary_df.loc[i, "Uniprot"] = ";".join([x for x in list(guide_df.Uniprot.unique())
@@ -2115,14 +2120,6 @@ def summarise_guides(last_df):
 		i += 1
 
 	return summary_df
-
-"""
-def extract_offtargets(guide_df):
-
-	guide = "GTCCTTCCCCCAATCCCCTCAGG"
-	m = re.findall(guide, chr1_n[0])
-	m = re.findall("(%s){s<=1}" %guide, chr1_n)
-"""
 
 
 ###########################################################################################

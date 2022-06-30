@@ -65,6 +65,15 @@ if args["OUTPUT_PATH"][-1] == "/":
 else:
 	path = args["OUTPUT_PATH"] + "/"
 
+
+"""
+def extract_offtargets(guide_df):
+
+	guide = "GTCCTTCCCCCAATCCCCTCAGG"
+	m = re.findall(guide, chr1_n[0])
+	m = re.findall("(%s){s<=1}" %guide, chr1_n)
+"""
+
 # -----------------------------------------------------------------------------------------#
 # Functions
 
