@@ -2279,45 +2279,49 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 	------------------------------------------------------
 				\n""")
 
-				if uniprot_df is not None and len(uniprot_df.index) != 0:
 
-					print("Adding affected interface and interacting partners..")
-
-					interaction_df = annotate_interface(annotated_edit_df=uniprot_df)
-
-					if interaction_df is not None and len(interaction_df.index) != 0:
-						print("Annotation Data Frame was created!")
-
-						interaction_df.to_csv(path + args["OUTPUT_FILE"] + "_protein_df.csv", index=False)
-
-						print("Protein Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +
-																				  "_protein_df.csv"))
-					else:
-						print("Protein Data Frame cannot be created because it is empty.")
 			else:
-				interaction_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_protein_df.csv")
+				uniprot_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_protein_df.csv")
 
-				print("""\n
+			if uniprot_df is not None and len(uniprot_df.index) != 0:
+
+				print("Adding affected interface and interacting partners..")
+
+				interaction_df = annotate_interface(annotated_edit_df=uniprot_df)
+
+				if interaction_df is not None and len(interaction_df.index) != 0:
+					print("Annotation Data Frame was created!")
+
+					interaction_df.to_csv(path + args["OUTPUT_FILE"] + "_protein_df.csv", index=False)
+
+					print("Protein Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +
+																			  "_protein_df.csv"))
+
+
+					print("""\n
 ------------------------------------------------------
-			Summary Data Frame 
+			   Summary Data Frame 
 ------------------------------------------------------
-				\n""")
+					\n""")
 
-			if interaction_df is not None and len(interaction_df.index) != 0:
-				print("Summarising information..")
+					print("Summarising information..")
 
-				summary_df = summarise_guides(last_df=interaction_df)
+					summary_df = summarise_guides(last_df=interaction_df)
 
-				if summary_df is not None and len(summary_df.index) != 0:
-					print("Summary Data Frame was created!")
+					if summary_df is not None and len(summary_df.index) != 0:
+						print("Summary Data Frame was created!")
 
-					summary_df.to_csv(path + args["OUTPUT_FILE"] + "_summary_df.csv", index=False)
+						summary_df.to_csv(path + args["OUTPUT_FILE"] + "_summary_df.csv", index=False)
 
-					print("Summary Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +
-																			  "_summary_df.csv"))
+						print("Summary Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +
+																				  "_summary_df.csv"))
+					else:
+						print("Summary Data Frame cannot be created because it is empty.")
+
 				else:
-					print("Summary Data Frame cannot be created because it is empty.")
-
+					print("Protein Data Frame cannot be created because it is empty.")
+			else:
+				print("Protein Data Frame cannot be created because it is empty.")
 
 	return True
 
