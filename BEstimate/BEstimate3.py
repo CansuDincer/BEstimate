@@ -935,6 +935,7 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 	mutation_locations = collect_mutation_location(mutations)
 
 	# Transcript filtration
+	loc_edit_df = None
 	if transcript_id is not None:
 		loc_edit_df = edit_df[edit_df.Transcript_ID == transcript_id]
 	else:
@@ -1660,7 +1661,6 @@ def annotate_edits(ensembl_object, vep_df):
 						uniprot_object = Uniprot(uniprotid=uniprot)
 						reviewed = uniprot_object.reviewed
 						uniprot_object.extract_uniprot_info()
-						print(row["Protein_Position"])
 						if row["Protein_Position"] is not None and pandas.isna(row["Protein_Position"]) is False:
 							ptms, domains = list(), list()
 							for position in str(row["Protein_Position"]).split(";"):
