@@ -1281,14 +1281,19 @@ def extract_hgvsp(hgvsp, which):
 					if which == "position":
 						return protein_change[3:-3]
 				else:
-					# Start codon lost - Met1?
+					# Start codon lost - Met1? | MetAla1_?2
 					if which == "old_aa":
-						return aa_3to1[protein_change[:3]]
+						aa1 = list()
+						aa_string = re.match("([a-z]+)([0-9]+)", protein_change.split("?")[0], re.I).groups()[0]
+						for i in [aa_string[x: x + 3] for x in range(0, len(aa_string), 3)]:
+							aa1.append(aa_3to1[i])
+						return ";".join(aa1)
+
 					if which == "new_aa":
-						if protein_change[-1] == "?":
+						if protein_change[-1] == "?" or protein_change[-2] == "?":
 							return "-"
 					if which == "position":
-						return protein_change[3]
+						return re.match("([a-z]+)([0-9]+)", protein_change.split("?")[0], re.I).groups()[1]
 
 			else:
 				if which == "old_aa":
@@ -1666,6 +1671,7 @@ def annotate_edits(ensembl_object, vep_df):
 							ptms, domains = list(), list()
 							for position in str(row["Protein_Position"]).split(";"):
 								if position is not None and position != "None" and type(position) != float:
+									print(row["Protein_Position"])
 									if int(position) in seq_mapping[uniprot].keys():
 										dom = uniprot_object.find_domain(
 											seq_mapping[uniprot][int(position)], row["Edited_AA"])
@@ -2283,9 +2289,9 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 					uniprot_df = annotate_edits(ensembl_object=ensembl_obj, vep_df=whole_vep_df)
 					print("Uniprot information was added!\n")
 				print("""\n
-	------------------------------------------------------
+------------------------------------------------------
 		   Edits - 3D Interface Annotation
-	------------------------------------------------------
+------------------------------------------------------
 				\n""")
 
 
