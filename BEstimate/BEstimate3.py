@@ -1273,6 +1273,7 @@ def extract_hgvsp(hgvsp, which):
 	if hgvsp is not None:
 		ensembl_protein = hgvsp.split(":p.")[0].split(".")[0]
 		protein_change = hgvsp.split("p.")[1]
+		print(protein_change)
 		if len(protein_change.split("delins")) == 1:
 			# SNP
 			if len(protein_change.split("=")) == 1:
