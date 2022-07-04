@@ -1293,7 +1293,7 @@ def extract_hgvsp(hgvsp, which):
 							if which == "old_aa":
 								return aa_3to1[alteration[:3]]
 							if which == "new_aa":
-								return aa_3to1[alteration[-3:]] + "X" *extension_amount + "*"
+								return aa_3to1[alteration[-3:]] + "X%s" % extension_amount + "*"
 							if which == "position":
 								return alteration[3:-3]
 						else:
@@ -1301,7 +1301,7 @@ def extract_hgvsp(hgvsp, which):
 								return aa_3to1[protein_change[:3]]
 							if which == "new_aa":
 								extension_amount = abs(int(protein_change.split("ext")[1])) - 1
-								return aa_3to1[protein_change[:3]] + "X" *extension_amount + aa_3to1[protein_change[:3]]
+								return aa_3to1[protein_change[:3]] + "X-%s" % extension_amount + aa_3to1[protein_change[:3]]
 							if which == "position":
 								return protein_change.split("ext")[0][3:]
 
