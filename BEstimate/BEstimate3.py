@@ -944,7 +944,10 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 			for d in transcript_dict:
 				if d["source"] == "ensembl_havana":
 					loc_edit_df = edit_df[edit_df.Transcript_ID == transcript]
-
+	if loc_edit_df is None:
+		for transcript, transcript_dict in ensembl_object.info_dict.items():
+			for d in transcript_dict:
+				print(d["source"])
 	# Each gRNA at a time
 	row_dicts = list()
 	for direction, direction_df in loc_edit_df.groupby(["Direction"]):
