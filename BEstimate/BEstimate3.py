@@ -1278,12 +1278,33 @@ def extract_hgvsp(hgvsp, which):
 			# SNP
 			if len(protein_change.split("=")) == 1:
 				if len(protein_change.split("?")) == 1:
-					if which == "old_aa":
-						return aa_3to1[protein_change[:3]]
-					if which == "new_aa":
-						return aa_3to1[protein_change[-3:]]
-					if which == "position":
-						return protein_change[3:-3]
+					if len(protein_change.split("ext")) == 1:
+						if which == "old_aa":
+							return aa_3to1[protein_change[:3]]
+						if which == "new_aa":
+							return aa_3to1[protein_change[-3:]]
+						if which == "position":
+							return protein_change[3:-3]
+					else:
+						# Extension for termination or start Ter629GlnextTer1 | Met1ext-5
+						if protein_change[:3] == "Ter":
+							alteration = protein_change.split("ext")[0]
+							extension_amount = int(protein_change.split("ext")[1]["3:"]) -1
+							if which == "old_aa":
+								return aa_3to1[alteration[:3]]
+							if which == "new_aa":
+								return aa_3to1[alteration[-3:]] + "X" *extension_amount + "*"
+							if which == "position":
+								return alteration[3:-3]
+						else:
+							if which == "old_aa":
+								return aa_3to1[protein_change[:3]]
+							if which == "new_aa":
+								extension_amount = abs(int(protein_change.split("ext")[1])) - 1
+								return aa_3to1[protein_change[:3]] + "X" *extension_amount + aa_3to1[protein_change[:3]]
+							if which == "position":
+								return protein_change.split("ext")[0][3:]
+
 				else:
 					# Start codon lost - Met1? | MetAla1_?2
 					if which == "old_aa":
@@ -1336,6 +1357,7 @@ def extract_hgvsp(hgvsp, which):
 				for i in protein_change.split("delins")[0].split("_"):
 					pos.append(re.match("([a-z]+)([0-9]+)", i, re.I).groups()[1])
 				return ";".join(pos)
+
 	else:
 		return None
 
