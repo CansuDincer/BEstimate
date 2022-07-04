@@ -2301,7 +2301,7 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 					print("VEP Data Frame cannot be created because it is empty!")
 		else:
 			whole_vep_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_vep_df.csv")
-
+		print(whole_vep_df)
 		if args["PROTEIN"]:
 			print("""\n
 ------------------------------------------------------
