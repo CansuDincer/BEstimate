@@ -1289,7 +1289,7 @@ def extract_hgvsp(hgvsp, which):
 						# Extension for termination or start Ter629GlnextTer1 | Met1ext-5
 						if protein_change[:3] == "Ter":
 							alteration = protein_change.split("ext")[0]
-							extension_amount = int(protein_change.split("ext")[1]["3:"]) -1
+							extension_amount = int(protein_change.split("ext")[1][3:]) -1
 							if which == "old_aa":
 								return aa_3to1[alteration[:3]]
 							if which == "new_aa":
