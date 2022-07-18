@@ -302,7 +302,7 @@ class Ensembl:
 
 		# Preparation of the Ensembl sequence for analysis
 
-		nucleotide_dict = {"A": "T", "T": "A", "G": "C", "C": "G"}
+		nucleotide_dict = {"A": "T", "T": "A", "G": "C", "C": "G", "N": "N"}
 
 		if mutations is None:
 
@@ -527,7 +527,7 @@ class Ensembl:
 			"""
 			Since some of the SwissProt object do not have xref mapping information 
 			We are missing SwissProt
-			Example : KRAS - ENSP00000308495 - 
+			Example : KRAS - ENSP00000308495 - EGFR - ENSP00000342376
 			{'ensembl_start': 1, 'description': 'V-Ki-ras2 Kirsten rat sarcoma viral oncogene homolog, isoform CRA_b ', 
 			'info_text': 'Generated via sequence_mapped', 'xref_end': 188, 'ensembl_identity': 100, 'info_type': 'SEQUENCE_MATCH',
 			 'ensembl_end': 188, 'xref_identity': 100, 'display_id': 'A0A024RAV5.49', 'dbname': 'Uniprot/SPTREMBL', 
