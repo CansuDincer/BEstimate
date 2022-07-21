@@ -69,6 +69,14 @@ def take_input():
 						help="If you have more than one mutations, a file for the mutations on the "
 							 "interested gene that you need to integrate into guide and/or annotation analysis")
 
+	# gRNA FLANKING REGIONS
+	parser.add_argument("flank", dest="FLAN", action="store_true",
+						help="The boolean option if the user wants to add flanking sequences of the gRNAs")
+	parser.add_argument("-flank3", dest="FLAN_3", default="7",
+						help="The number of nucleotides in the 3' flanking region")
+	parser.add_argument("-flank5", dest="FLAN_3", default="11",
+						help="The number of nucleotides in the 5' flanking region")
+
 	# BE INFORMATION
 
 	parser.add_argument("-edit", dest="EDIT", choices=["A", "T", "G", "C"],
@@ -386,6 +394,34 @@ class Ensembl:
 							self.flan_right_sequence_analysis = "".join(
 								[nucleotide_dict[n] for n in self.flan_left_sequence_analysis[::-1]])
 
+	def extract_gRNA_flan_sequence(self, location, direction, fivep, threep):
+		"""
+		Annotating flanking regions of the gRNAs
+		:param grna: gRNA target sequence
+		:param location: Location of the gRNA target sequence
+		:param fivep: Number of the nucleotides in the 5' flanking region
+		:param threep: Number of the nucleotides in the 3' flanking region
+		:return:
+		"""
+
+		if direction == "left":
+			grna_strand = "-1"
+		else:
+			grna_strand = "1"
+
+		grna_flan_ensembl = self.server + "/sequence/region/human/%s:%s?expand_3prime=%s;expand_5prime=%s;content-type=text/plain" \
+							% (location, grna_strand, threep, fivep)
+
+		print("Request to Ensembl REST API for flanking sequence information:")
+		grna_flan_request = requests.get(grna_flan_ensembl,
+								   headers={"Content-Type": "text/plain"})
+
+		if grna_flan_request.status_code != 200:
+			print("No response from ensembl sequence!\n")
+
+		print(grna_flan_request.text)
+
+
 	def extract_info(self, chromosome, loc_start, loc_end, transcript=None):
 
 		ensembl = "/overlap/region/human/%s:%s-%s?feature=transcript;feature=exon;feature=mane;" \
@@ -676,7 +712,7 @@ def add_genomic_location(sequence_range, crispr_dict, crispr_direction, strand):
 
 def extract_grna_sites(hugo_symbol, pam_sequence, searched_nucleotide,
 					   activity_window, pam_window, protospacer_length,
-					   ensembl_object):
+					   flan, flan_3, flan_5, ensembl_object):
 	"""
 	Extracting the gRNA targeted sites having editable nucleotide(s) on the interested genes
 	:param hugo_symbol: The Hugo Symbol of the interested gene.
@@ -685,6 +721,9 @@ def extract_grna_sites(hugo_symbol, pam_sequence, searched_nucleotide,
 	:param activity_window: The location of the activity windiw on the protospacer sequence.
 	:param pam_window: The location of the PAM sequence when 1st index of the protospacer is 1.
 	:param protospacer_length: The length of protospacer.
+	:param flan: The boolean parameter if the user wants to add flanking regions of the gRNAs
+	:param flan_3: The number of nucleotides which will be added 3' flanking region
+	:param flan_5: The number of nucleotides which will be added 5' flanking region
 	:param ensembl_object: The Ensembl Object created with Ensembl().
 	:return crispr_df: A data frame having sequence, location and direction information of the CRISPRs.
 	"""
@@ -768,6 +807,11 @@ def extract_grna_sites(hugo_symbol, pam_sequence, searched_nucleotide,
 		else ensembl_object.check_cds(x["Transcript_ID"], int(x["Location"].split(":")[1].split("-")[1]),
 									  int(x["Location"].split(":")[1].split("-")[0]) + 1), axis=1)
 
+	if flan:
+		crisprs_df["gRNA_flanking_sequences"] = crisprs_df.apply(
+			lambda x: ensembl_object.extract_gRNA_flan_sequence(
+				location=x.Location, direction=x.Direction, fivep=flan_5, threep=flan_3), axis=1)
+
 	return crisprs_df
 
 
@@ -832,8 +876,8 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 	print("Edit df is filling...")
 	edit_df = pandas.DataFrame(columns=["Hugo_Symbol", "CRISPR_PAM_Sequence", "gRNA_Target_Sequence", "Location",
 										"Edit_Location", "Direction", "Strand", "Gene_ID", "Transcript_ID", "Exon_ID",
-										"guide_in_CDS", "Edit_in_Exon", "Edit_in_CDS", "guide_on_mutation",
-										"guide_change_mutation"])
+										"guide_in_CDS", "gRNA_flanking_sequences", "Edit_in_Exon", "Edit_in_CDS",
+										"guide_on_mutation", "guide_change_mutation"])
 
 	for ind, row in crispr_df.iterrows():
 
@@ -874,11 +918,11 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 										row["gRNA_Target_Sequence"], row["Location"], actual_ind,
 										row["Direction"], ensembl_object.strand, ensembl_object.gene_id,
 										row["Transcript_ID"], row["Exon_ID"], row["guide_in_CDS"],
-										edit_in_exon, edit_in_cds]],
+										row["gRNA_flanking_sequences"], edit_in_exon, edit_in_cds]],
 									  columns=["Hugo_Symbol", "CRISPR_PAM_Sequence", "gRNA_Target_Sequence",
 											   "Location", "Edit_Location", "Direction", "Strand",
 											   "Gene_ID", "Transcript_ID", "Exon_ID", "guide_in_CDS",
-											   "Edit_in_Exon", "Edit_in_CDS"])
+											   "gRNA_flanking_sequences", "Edit_in_Exon", "Edit_in_CDS"])
 				edit_df = pandas.concat([edit_df, df])
 
 		else:
@@ -886,10 +930,12 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 			df = pandas.DataFrame([[row["Hugo_Symbol"], row["CRISPR_PAM_Sequence"],
 									row["gRNA_Target_Sequence"], row["Location"], "No edit",
 									row["Direction"], ensembl_object.strand, ensembl_object.gene_id,
-									row["Transcript_ID"], row["Exon_ID"], row["guide_in_CDS"], False, False]],
+									row["Transcript_ID"], row["Exon_ID"], row["guide_in_CDS"],
+									row["gRNA_flanking_sequences"], False, False]],
 								  columns=["Hugo_Symbol", "CRISPR_PAM_Sequence", "gRNA_Target_Sequence",
 										   "Location", "Edit_Location", "Direction", "Strand", "Gene_ID",
-										   "Transcript_ID", "Exon_ID", "guide_in_CDS", "Edit_in_Exon", "Edit_in_CDS"])
+										   "Transcript_ID", "Exon_ID", "guide_in_CDS", "gRNA_flanking_sequences",
+										   "Edit_in_Exon", "Edit_in_CDS"])
 			edit_df = pandas.concat([edit_df, df])
 
 	edit_df["# Edits/guide"] = 0
@@ -1018,6 +1064,7 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 						 "Transcript_ID": grna_edit_df["Transcript_ID"].values[0],
 						 "Exon_ID": grna_edit_df["Exon_ID"].values[0],
 						 "guide_in_CDS": grna_edit_df["guide_in_CDS"].values[0],
+						 "gRNA_flanking_sequences": grna_edit_df["gRNA_flanking_sequences"].values[0],
 						 "Edit_in_Exon": grna_edit_df["Edit_in_Exon"].values[0],
 						 "Edit_in_CDS": grna_edit_df["Edit_in_CDS"].values[0],
 						 "guide_on_mutation": grna_edit_df["guide_on_mutation"].values[0],
@@ -1101,6 +1148,7 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 						 "Transcript_ID": grna_edit_df["Transcript_ID"].values[0],
 						 "Exon_ID": grna_edit_df["Exon_ID"].values[0],
 						 "guide_in_CDS": grna_edit_df["guide_in_CDS"].values[0],
+						 "gRNA_flanking_sequences": grna_edit_df["gRNA_flanking_sequences"].values[0],
 						 "Edit_in_Exon": grna_edit_df["Edit_in_Exon"].values[0],
 						 "Edit_in_CDS": grna_edit_df["Edit_in_CDS"].values[0],
 						 "guide_on_mutation": grna_edit_df["guide_on_mutation"].values[0],
@@ -1171,6 +1219,7 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 						 "Transcript_ID": grna_edit_df["Transcript_ID"].values[0],
 						 "Exon_ID": grna_edit_df["Exon_ID"].values[0],
 						 "guide_in_CDS": grna_edit_df["guide_in_CDS"].values[0],
+						 "gRNA_flanking_sequences": grna_edit_df["gRNA_flanking_sequences"].values[0],
 						 "Edit_in_Exon": grna_edit_df["Edit_in_Exon"].values[0],
 						 "Edit_in_CDS": grna_edit_df["Edit_in_CDS"].values[0],
 						 "guide_on_mutation": grna_edit_df["guide_on_mutation"].values[0],
@@ -1252,6 +1301,7 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 						 "Transcript_ID": grna_edit_df["Transcript_ID"].values[0],
 						 "Exon_ID": grna_edit_df["Exon_ID"].values[0],
 						 "guide_in_CDS": grna_edit_df["guide_in_CDS"].values[0],
+						 "gRNA_flanking_sequences": grna_edit_df["gRNA_flanking_sequences"].values[0],
 						 "Edit_in_Exon": grna_edit_df["Edit_in_Exon"].values[0],
 						 "Edit_in_CDS": grna_edit_df["Edit_in_CDS"].values[0],
 						 "guide_on_mutation": grna_edit_df["guide_on_mutation"].values[0],
