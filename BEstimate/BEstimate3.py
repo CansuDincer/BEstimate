@@ -2296,6 +2296,7 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 									   activity_window=[int(args["ACTWINDOW"].split("-")[0]),
 														int(args["ACTWINDOW"].split("-")[1])],
 									   pam_sequence=args["PAMSEQ"], protospacer_length=args["PROTOLEN"],
+									   flan = args["FLAN"], flan_3=args["FLAN_3"], flan_5=args["FLAN_5"],
 									   ensembl_object=ensembl_obj)
 
 		if len(crispr_df.index) != 0: print("CRISPR Data Frame was created!")
