@@ -74,7 +74,7 @@ def take_input():
 						help="The boolean option if the user wants to add flanking sequences of the gRNAs")
 	parser.add_argument("-flank3", dest="FLAN_3", default="7",
 						help="The number of nucleotides in the 3' flanking region")
-	parser.add_argument("-flank5", dest="FLAN_3", default="11",
+	parser.add_argument("-flank5", dest="FLAN_5", default="11",
 						help="The number of nucleotides in the 5' flanking region")
 
 	# BE INFORMATION
