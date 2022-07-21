@@ -70,7 +70,7 @@ def take_input():
 							 "interested gene that you need to integrate into guide and/or annotation analysis")
 
 	# gRNA FLANKING REGIONS
-	parser.add_argument("flank", dest="FLAN", action="store_true",
+	parser.add_argument("-flank", dest="FLAN", action="store_true",
 						help="The boolean option if the user wants to add flanking sequences of the gRNAs")
 	parser.add_argument("-flank3", dest="FLAN_3", default="7",
 						help="The number of nucleotides in the 3' flanking region")
