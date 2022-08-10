@@ -411,16 +411,13 @@ class Ensembl:
 
 		grna_flan_ensembl = self.server + "/sequence/region/human/%s:%s?expand_3prime=%s;expand_5prime=%s;content-type=text/plain" \
 							% (location, grna_strand, threep, fivep)
-
-		print("Request to Ensembl REST API for flanking sequence information:")
 		grna_flan_request = requests.get(grna_flan_ensembl,
 								   headers={"Content-Type": "text/plain"})
 
 		if grna_flan_request.status_code != 200:
 			print("No response from ensembl sequence!\n")
 
-		print(grna_flan_request.text)
-
+		return grna_flan_request.text
 
 	def extract_info(self, chromosome, loc_start, loc_end, transcript=None):
 
