@@ -2248,7 +2248,7 @@ def main():
 The given arguments are:\nGene: %s\nAssembl: %s\nEnsembl transcript ID: %s\nPAM sequence: %s\nPAM window: %s
 Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleotide: %s\nVEP and Uniprot analysis: %s\nMutation on genome: %s """
 		  % (args["GENE"], args["ASSEMBLY"], args["TRANSCRIPT"], args["PAMSEQ"], args["PAMWINDOW"], args["PROTOLEN"],
-			 args["ACTWINDOW"], args["EDIT"], args["EDIT_TO"], protein, mutations))
+			 args["ACTWINDOW"], args["EDIT"], args["EDIT_TO"], protein, ", ".join(mutations)))
 
 	print("""\n
 ------------------------------------------------------ 
