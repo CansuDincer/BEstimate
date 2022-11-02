@@ -294,6 +294,7 @@ class Ensembl:
 		print(label_line)
 		print("The location of the interested gene: %s\n" % label_line.split(" ")[1])
 		flan_label_line = seq_flan_request.text.split("\n")[0]
+		print(flan_label_line)
 		self.sequence = "".join(seq_request.text.split("\n")[1:])
 		self.flan_sequence = "".join(seq_flan_request.text.split("\n")[1:])
 		self.gene_range = [int(label_line.split(":")[-3]), int(label_line.split(":")[-2])]
