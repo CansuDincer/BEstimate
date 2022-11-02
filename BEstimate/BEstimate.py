@@ -808,6 +808,8 @@ def extract_grna_sites(hugo_symbol, pam_sequence, searched_nucleotide,
 		crisprs_df["gRNA_flanking_sequences"] = crisprs_df.apply(
 			lambda x: ensembl_object.extract_gRNA_flan_sequence(
 				location=x.Location, direction=x.Direction, fivep=flan_5, threep=flan_3), axis=1)
+	else:
+		crisprs_df["gRNA_flanking_sequences"] = None
 
 	return crisprs_df
 
