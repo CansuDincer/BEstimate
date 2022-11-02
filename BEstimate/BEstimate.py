@@ -1719,6 +1719,7 @@ def annotate_edits(ensembl_object, vep_df):
 			if row.Protein_ID is not None and row.Protein_ID in ensembl_seq_mapping.keys() and \
 					ensembl_seq_mapping[row.Protein_ID] is not None and ensembl_seq_mapping[row.Protein_ID] != []:
 				seq_mapping = ensembl_seq_mapping[row.Protein_ID]
+				print(seq_mapping)
 				reviewed = list()
 				uniprot_tbc = list()
 				if row["swissprot"] is not None and row["swissprot"] in seq_mapping.keys():
