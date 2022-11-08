@@ -47,6 +47,8 @@ def take_input():
 
 	parser.add_argument("-o", dest="OUTPUT_PATH", default=os.getcwd() + "/",
 						help="The path for output. If not specified the current directory will be used!")
+	parser.add_argument("-i", dest="INPUT_PATH", default=os.getcwd() + "/",
+						help="The path for input. If not specified the current directory will be used!")
 
 	parsed_input = parser.parse_args()
 	input_dict = vars(parsed_input)
@@ -72,21 +74,16 @@ else:
 # Functions
 
 
-def find_pam_protospacer(sequence, pam_sequence, searched_nucleotide,
-						 activity_window, pam_window, protospacer_length):
+def find_pam_protospacer(sequence, pam_sequence, pam_window, protospacer_length):
 	"""
 	Finding all possible PAM and protospacer regions on the sequence of the gene.
 	:param sequence: The sequence of the interested gene.
 	:param pam_sequence: The sequence pattern of the PAM region (NGG/NG etc)
-	:param searched_nucleotide: The interested nucleotide which will be changed with BE
-	:param activity_window: The location of the activity window on the protospacer sequence.
 	:param pam_window: The location of the PAM sequence when 1st index of the protospacer is 1.
-	:param protospacer_length: The length of protospacer.
 	:return crisprs: A list of dictionary having sequences and locations of the gRNA targeted
 	gene parts. The indices are indicated when the first index of the gene is 1.
 	"""
 	# Since python index starts from 0, decrease the start position index given from the user
-	activity_window = [activity_window[0] - 1, activity_window[1]]
 	pam_window = [pam_window[0] - 1, pam_window[1]]
 
 	# Using Regular Expressions, specify PAM pattern
@@ -113,19 +110,8 @@ def find_pam_protospacer(sequence, pam_sequence, searched_nucleotide,
 
 			# Search regex pattern inside the sub sequence
 			for match_sequence in re.finditer(pattern, sub_sequence):
-
-				# If there is match, then check if searched nucleotide inside the activity window
-				if searched_nucleotide in list(match_sequence.group()[activity_window[0]:activity_window[1]]):
-					activity_sequence = match_sequence.group()[activity_window[0]:activity_window[1]]
-
-					# If searched nucleotide is also there, add the sequence inside crisprs!
-					crisprs.append({"index": [nuc_index, nuc_index + pam_window[1]],
-									"crispr": match_sequence.group(),
-									"activity_seq": activity_sequence})
-				else:
-					crisprs.append({"index": [nuc_index, nuc_index + pam_window[1]],
-									"crispr": match_sequence.group(),
-									"activity_seq": "No window"})
+				crisprs.append({"index": [nuc_index, nuc_index + pam_window[1]],
+								"crispr": match_sequence.group()})
 
 	if crisprs is not []: print("CRISPRs are found!")
 	return crisprs

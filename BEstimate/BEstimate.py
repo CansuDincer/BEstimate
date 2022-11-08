@@ -427,25 +427,51 @@ class Ensembl:
 
 		request = requests.get(self.server + ensembl, headers={"Content-Type": "application/json"})
 
+		info_dict = dict()
+
 		if request.status_code != 200:
 			print("No response from ensembl!")
 		else:
+			canonicals = list()
 			for output in request.json():
 				if transcript is None:
-					if output["feature_type"] == "transcript" and output["Parent"] == self.gene_id and output["source"] == "ensembl_havana":
-						if output["id"] not in self.info_dict.keys():
-							self.info_dict[output["id"]] = \
-								[{"start": output["start"], "end": output["end"], "biotype": output["biotype"],
-								  "canonical": output["is_canonical"], "source": output["source"]}]
+					if output["feature_type"] == "mane" and output["Parent"] == self.gene_id:
+						if output["id"].split(".")[0] not in canonicals:
+							canonicals.append(output["id"].split(".")[0])
 
-						else:
-							old_val = self.info_dict[output["id"]]
-							if {"start": output["start"], "end": output["end"],
-								"biotype": output["biotype"], "canonical": output["is_canonical"], "source": output["source"]} not in old_val:
-								old_val.append(
-									{"start": output["start"], "end": output["end"],
-									 "biotype": output["biotype"], "canonical": output["is_canonical"], "source": output["source"]})
-								self.info_dict[output["id"]] = old_val
+						if output["id"].split(".")[0] in canonicals:
+							if output["id"] not in info_dict.keys():
+								info_dict[output["id"]] = \
+									[{"start": output["start"], "end": output["end"]}]
+
+							else:
+								old_val = info_dict[output["id"]]
+								if {"start": output["start"], "end": output["end"]} not in old_val:
+									old_val.append(
+										{"start": output["start"], "end": output["end"]})
+									info_dict[output["id"]] = old_val
+
+					if output["feature_type"] == "transcript" and output["Parent"] == self.gene_id:
+						if "is_canonical" in output.keys():
+							if output["is_canonical"] == 1:
+								if output["id"].split(".")[0] not in canonicals:
+									canonicals.append(output["id"].split(".")[0])
+						if "source" in output.keys():
+							if output["source"] == "ensembl_havana":
+								if output["id"].split(".")[0] not in canonicals:
+									canonicals.append(output["id"].split(".")[0])
+
+						if output["id"].split(".")[0] in canonicals:
+							if output["id"] not in info_dict.keys():
+								info_dict[output["id"]] = \
+									[{"start": output["start"], "end": output["end"]}]
+
+							else:
+								old_val = info_dict[output["id"]]
+								if {"start": output["start"], "end": output["end"]} not in old_val:
+									old_val.append(
+										{"start": output["start"], "end": output["end"]})
+									info_dict[output["id"]] = old_val
 				else:
 					# Selected transcript
 					if output["feature_type"] == "transcript" and output["Parent"] == self.gene_id:
@@ -453,37 +479,21 @@ class Ensembl:
 						transcript_request = requests.get(self.server + transcript_info,
 														  headers={"Content-Type": "application/json"})
 						transcript_output = transcript_request.json()
-						if output["transcript_id"] not in self.info_dict.keys():
-							self.info_dict[output["transcript_id"]] = \
-								[{"start": transcript_output["start"], "end": transcript_output["end"],
-								  "biotype": transcript_output["biotype"], "canonical": transcript_output["is_canonical"],
-								  "source": output["source"]}]
+						if output["transcript_id"] not in info_dict.keys():
+							info_dict[output["transcript_id"]] = \
+								[{"start": transcript_output["start"], "end": transcript_output["end"]}]
 
 						else:
-							old_val = self.info_dict[output["transcript_id"]]
-							if {"start": transcript_request["start"], "end": transcript_request["end"],
-								"biotype": transcript_request["biotype"],
-								"canonical": transcript_request["is_canonical"], "source": output["source"]} not in old_val:
+							old_val = info_dict[output["transcript_id"]]
+							if {"start": transcript_request["start"], "end": transcript_request["end"]} not in old_val:
 								old_val.append(
-									{"start": transcript_request["start"], "end": transcript_request["end"],
-									 "biotype": transcript_request["biotype"],
-									 "canonical": transcript_request["is_canonical"], "source": output["source"]})
-								self.info_dict[output["transcript_id"]] = old_val
+									{"start": transcript_request["start"], "end": transcript_request["end"]})
+								info_dict[output["transcript_id"]] = old_val
 
 			for output in request.json():
-				if output["feature_type"] == "exon" and self.info_dict != {} and \
-						output["Parent"] in self.info_dict.keys() and output["source"] == "ensembl_havana":
-					for d in self.info_dict[output["Parent"]]:
-						if "exon" not in d.keys():
-							d["exon"] = {output["exon_id"]: {"start": output["start"], "end": output["end"]}}
-						else:
-							if output["exon_id"] not in d["exon"].keys():
-								d["exon"][output["exon_id"]] = {"start": output["start"], "end": output["end"]}
-
-			for output in request.json():
-				if output["feature_type"] == "cds" and self.info_dict != {} and \
-						output["Parent"] in self.info_dict.keys() and output["source"] == "ensembl_havana":
-					for d in self.info_dict[output["Parent"]]:
+				if output["feature_type"] == "cds" and info_dict != {} and output["Parent"] in info_dict.keys():
+					for k in range(len(info_dict[output["Parent"]])):
+						d = info_dict[output["Parent"]][k]
 						coding_pos = list(range(output["start"], output["end"] + 1))
 						if "cds" not in d.keys():
 							d["cds"] = {output["protein_id"]: coding_pos}
@@ -496,8 +506,62 @@ class Ensembl:
 									if i not in t:
 										t.append(i)
 								d["cds"][output["protein_id"]] = t
+						if d not in info_dict[output["Parent"]]:
+							info_dict[output["Parent"]][k] = d
 
-		if self.info_dict != {}:
+			protein_ids = list()
+			swiss_protein_ids = list()
+			selected_protein_ids = list()
+			selected_transcript = list()
+			for ids in info_dict.keys():
+				for d in info_dict[ids]:
+					protein_ids.extend(d["cds"].keys())
+			if protein_ids:
+				for p in protein_ids:
+					protein_ensembl = "/xrefs/id/{0}?external_db=Uniprot/SWISSPROT%".format(p)
+					protein_request = requests.get(self.server + protein_ensembl,
+												   headers={"Content-Type": "application/json"})
+					for i in protein_request.json():
+						if i["dbname"] == "Uniprot/SWISSPROT":
+							swiss_protein_ids.append(p)
+							if "ensembl_end" in i.keys() and "ensembl_start" in i.keys() and \
+									"xref_end" in i.keys() and "xref_start" in i.keys():
+								selected_protein_ids.append(p)
+				if selected_protein_ids:
+					for p in selected_protein_ids:
+						for ids in info_dict.keys():
+							for d in info_dict[ids]:
+								if p in d["cds"].keys():
+									if ids not in selected_transcript:
+										selected_transcript.append(ids)
+				else:
+					if swiss_protein_ids:
+						for p in swiss_protein_ids:
+							for ids in info_dict.keys():
+								for d in info_dict[ids]:
+									if p in d["cds"].keys():
+										if ids not in selected_transcript:
+											selected_transcript.append(ids)
+					else:
+						selected_transcript = list(info_dict.keys())
+			else:
+				selected_transcript = list(info_dict.keys())
+
+			if selected_transcript:
+				info_dict1_1 = {key : info_dict[key] for key in info_dict.keys() if key in selected_transcript}
+				info_dict2 = {key: info_dict[key] for key in info_dict.keys() if info_dict[key] not in info_dict1_1[key]}
+
+			for output in request.json():
+				if output["feature_type"] == "exon" and info_dict2 != {} and output["Parent"] in info_dict2.keys():
+					for d in info_dict2[output["Parent"]]:
+						if "exon" not in d.keys():
+							d["exon"] = {output["exon_id"]: {"start": output["start"], "end": output["end"]}}
+						else:
+							if output["exon_id"] not in d["exon"].keys():
+								d["exon"][output["exon_id"]] = {"start": output["start"], "end": output["end"]}
+
+		if info_dict2 != {}:
+			self.info_dict = info_dict2
 			return 1
 		else:
 			return 0
@@ -557,26 +621,7 @@ class Ensembl:
 			print("No response from ensembl!")
 			return 0
 		else:
-			"""
-			Since some of the SwissProt object do not have xref mapping information 
-			We are missing SwissProt
-			Example : KRAS - ENSP00000308495 - EGFR - ENSP00000342376
-			{'ensembl_start': 1, 'description': 'V-Ki-ras2 Kirsten rat sarcoma viral oncogene homolog, isoform CRA_b ', 
-			'info_text': 'Generated via sequence_mapped', 'xref_end': 188, 'ensembl_identity': 100, 'info_type': 'SEQUENCE_MATCH',
-			 'ensembl_end': 188, 'xref_identity': 100, 'display_id': 'A0A024RAV5.49', 'dbname': 'Uniprot/SPTREMBL', 
-			 'synonyms': [], 'primary_id': 'A0A024RAV5', 'evalue': None, 'xref_start': 1, 'version': '49', 
-			 'cigar_line': '188M', 'db_display_name': 'UniProtKB/TrEMBL', 'score': 972}
 
-			{'description': 'GTPase KRas GTPase KRas, N-terminally processed', 'display_id': 'P01116.246', 
-			'info_text': 'Generated via direct', 'dbname': 'Uniprot/SWISSPROT', 'primary_id': 'P01116', 'synonyms': [], 
-			'info_type': 'DIRECT', 'version': '246', 'db_display_name': 'UniProtKB/Swiss-Prot'}
-
-			{'info_type': 'DIRECT', 'db_display_name': 'UniProtKB isoform', 'version': '0', 'dbname': 'Uniprot_isoform', 
-			'display_id': 'P01116-2', 'info_text': '', 'description': None, 'synonyms': [], 'primary_id': 'P01116-2'}
-
-			We are loosing P01116 which was retrieved from VEP analysis too. 
-
-			"""
 			seq_mapping = dict()
 			for i in protein_request.json():
 				uniprot = i["primary_id"]
