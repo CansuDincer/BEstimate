@@ -294,7 +294,6 @@ class Ensembl:
 		print(label_line)
 		print("The location of the interested gene: %s\n" % label_line.split(" ")[1])
 		flan_label_line = seq_flan_request.text.split("\n")[0]
-		print(flan_label_line)
 		self.sequence = "".join(seq_request.text.split("\n")[1:])
 		self.flan_sequence = "".join(seq_flan_request.text.split("\n")[1:])
 		self.gene_range = [int(label_line.split(":")[-3]), int(label_line.split(":")[-2])]
@@ -1720,7 +1719,6 @@ def annotate_edits(ensembl_object, vep_df):
 			if row.Protein_ID is not None and row.Protein_ID in ensembl_seq_mapping.keys() and \
 					ensembl_seq_mapping[row.Protein_ID] is not None and ensembl_seq_mapping[row.Protein_ID] != []:
 				seq_mapping = ensembl_seq_mapping[row.Protein_ID]
-				print(seq_mapping)
 				reviewed = list()
 				uniprot_tbc = list()
 				if row["swissprot"] is not None and row["swissprot"] in seq_mapping.keys():
@@ -1734,44 +1732,42 @@ def annotate_edits(ensembl_object, vep_df):
 					uniprot_tbc = list()
 					if len(reviewed) > 0:
 						uniprot_tbc.extend(reviewed)
+			else:
+				uniprot_tbc = list(vep_df["swissprot"].unique())
 
-				# else:
-				# uniprot_tbc.extend(seq_mapping.keys())
+			if uniprot_tbc:
+				for uniprot in uniprot_tbc:
+					# Only one SwissProt
+					uniprot_object = Uniprot(uniprotid=uniprot)
+					reviewed = uniprot_object.reviewed
+					uniprot_object.extract_uniprot_info()
+					if row["Protein_Position"] is not None and pandas.isna(row["Protein_Position"]) is False:
+						ptms, domains = list(), list()
+						for position in str(row["Protein_Position"]).split(";"):
+							if position is not None and position != "None" and type(position) != float:
+								if int(position) in seq_mapping[uniprot].keys():
+									dom = uniprot_object.find_domain(
+										seq_mapping[uniprot][int(position)], row["Edited_AA"])
+									phos = uniprot_object.find_ptm_site(
+										"phosphorylation", seq_mapping[uniprot][int(position)],
+										row["Edited_AA"])
+									meth = uniprot_object.find_ptm_site(
+										"methylation", seq_mapping[uniprot][int(position)],
+										row["Edited_AA"])
+									ubi = uniprot_object.find_ptm_site(
+										"ubiquitination", seq_mapping[uniprot][int(position)],
+										row["Edited_AA"])
+									acet = uniprot_object.find_ptm_site(
+										"acetylation", seq_mapping[uniprot][int(position)],
+										row["Edited_AA"])
 
-				if uniprot_tbc:
-					for uniprot in uniprot_tbc:
-						# Only one SwissProt
-						uniprot_object = Uniprot(uniprotid=uniprot)
-						reviewed = uniprot_object.reviewed
-						uniprot_object.extract_uniprot_info()
-						if row["Protein_Position"] is not None and pandas.isna(row["Protein_Position"]) is False:
-							ptms, domains = list(), list()
-							for position in str(row["Protein_Position"]).split(";"):
-								if position is not None and position != "None" and type(position) != float:
-									print(row["Protein_Position"])
-									if int(position) in seq_mapping[uniprot].keys():
-										dom = uniprot_object.find_domain(
-											seq_mapping[uniprot][int(position)], row["Edited_AA"])
-										phos = uniprot_object.find_ptm_site(
-											"phosphorylation", seq_mapping[uniprot][int(position)],
-											row["Edited_AA"])
-										meth = uniprot_object.find_ptm_site(
-											"methylation", seq_mapping[uniprot][int(position)],
-											row["Edited_AA"])
-										ubi = uniprot_object.find_ptm_site(
-											"ubiquitination", seq_mapping[uniprot][int(position)],
-											row["Edited_AA"])
-										acet = uniprot_object.find_ptm_site(
-											"acetylation", seq_mapping[uniprot][int(position)],
-											row["Edited_AA"])
-
-										if dom is not None: domains.append(dom + "-" + position)
-										if phos is not None: ptms.append(phos + "-" + position)
-										if meth is not None: ptms.append(meth + "-" + position)
-										if ubi is not None: ptms.append(ubi + "-" + position)
-										if acet is not None: ptms.append(acet + "-" + position)
-							if ptms: ptm = ";".join([i for i in ptms])
-							if domains: domain = ";".join([i for i in domains])
+									if dom is not None: domains.append(dom + "-" + position)
+									if phos is not None: ptms.append(phos + "-" + position)
+									if meth is not None: ptms.append(meth + "-" + position)
+									if ubi is not None: ptms.append(ubi + "-" + position)
+									if acet is not None: ptms.append(acet + "-" + position)
+						if ptms: ptm = ";".join([i for i in ptms])
+						if domains: domain = ";".join([i for i in domains])
 
 			df_d = {"Hugo_Symbol": [row["Hugo_Symbol"]], "CRISPR_PAM_Sequence": [row["CRISPR_PAM_Sequence"]],
 					"CRISPR_PAM_Location": [row["CRISPR_PAM_Location"]],

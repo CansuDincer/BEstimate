@@ -8,7 +8,8 @@
 # -----------------------------------------------------------------------------------------#
 
 # Import necessary packages
-import os, pandas, re, argparse
+import os, pandas, argparse
+from BEstimate.BEstimate.BEstimate import find_pam_protospacer, add_genomic_location
 from Bio import SeqIO
 
 
@@ -50,6 +51,8 @@ def take_input():
 
 	parser.add_argument("-ofile", dest="OUTPUT_FILE", default="output",
 						help="The output file name, if not specified \"position\" will be used!")
+	parser.add_argument("-ifile", dest="INPUT_FILE", default="output",
+						help="The input file name, if not specified \"position\" will be used!")
 
 	parsed_input = parser.parse_args()
 	input_dict = vars(parsed_input)
@@ -59,101 +62,19 @@ def take_input():
 
 args = take_input()
 
-path = ""
+output_path = ""
 if args["OUTPUT_PATH"][-1] == "/":
-	path = args["OUTPUT_PATH"]
+	output_path = args["OUTPUT_PATH"]
 else:
-	path = args["OUTPUT_PATH"] + "/"
+	output_path = args["OUTPUT_PATH"] + "/"
 
-
-"""
-def extract_offtargets(guide_df):
-
-	guide = "GTCCTTCCCCCAATCCCCTCAGG"
-	m = re.findall(guide, chr1_n[0])
-	m = re.findall("(%s){s<=1}" %guide, chr1_n)
-"""
+input_path = ""
+if args["INPUT_PATH"][-1] == "/":
+	input_path = args["INPUT_PATH"]
+else:
+	input_path = args["INPUT_PATH"] + "/"
 
 # -----------------------------------------------------------------------------------------#
-# Functions
-
-
-def find_pam_protospacer_genome(sequence, pam_sequence, pam_window, protospacer_length):
-	"""
-	Finding all possible PAM and protospacer regions on the genome
-	:param sequence: The sequence of the interested gene.
-	:param pam_sequence: The sequence pattern of the PAM region (NGG/NG etc)
-	:param pam_window: The location of the PAM sequence when 1st index of the protospacer is 1.
-	:param protospacer_length: The length of protospacer.
-	:return crisprs: A list of dictionary having sequences and locations of the gRNA targeted
-	gene parts. The indices are indicated when the first index of the gene is 1.
-	"""
-	# Since python index starts from 0, decrease the start position index given from the user
-	pam_window = [int(pam_window.split("-")[0]), int(pam_window.split("-")[1])]
-
-	# Using Regular Expressions, specify PAM pattern
-	pam_pattern = ""
-	for nuc in list(pam_sequence):
-		if nuc != "N":
-			pam_pattern += nuc + "{1}"
-		else:
-			pam_pattern += "[ATCG]{1}"
-
-	# Search protospacer length of nucleatide sequence and add PAM pattern after that
-	pattern = r'[ATCG]{%s}%s' % (protospacer_length, pam_pattern)
-	print("Pattern is created!")
-
-	crisprs = []
-	print("Pattern is searching through the sequence...")
-	for nuc_index in range(0, len(sequence)):
-
-		# One by one in the given sequence
-		if nuc_index + pam_window[1] <= len(sequence):
-
-			# Add started nucleotide index total length of targeted base editing site (PAM index)
-			sub_sequence = sequence[nuc_index:nuc_index + pam_window[1]]
-
-			# Search regex pattern inside the sub sequence
-			for match_sequence in re.finditer(pattern, sub_sequence):
-				crisprs.append({"index": [nuc_index, nuc_index + pam_window[1]],
-								"crispr": match_sequence.group()})
-
-	if crisprs is not []: print("CRISPRs are found!")
-	return crisprs
-
-
-def add_genomic_location(sequence_range, crispr_dict, crispr_direction, strand):
-	"""
-	Adding genomic location info on crisprs
-	:param sequence_range: The range of the sequence on the genome (from Ensembl)
-	:param crispr_dict: The CRISPR dictionary created by extract_activity_window()
-	:param crispr_direction: The direction of the created CRISPR (left or right)
-	:param strand: The strand of the given gene (-1 or 1)
-	:return crispr_seq: The sequence of the CRISPR
-	:return genomic_location: The genomic coordinate of the above CRISPR on genome
-	"""
-
-	new_range = []
-	if strand == 1:
-		new_range = sequence_range
-	elif strand == -1:
-		new_range = [sequence_range[1], sequence_range[0]]
-
-	# Look for both direction
-	crispr_seq, genomic_location = crispr_dict["crispr"], ""
-
-	if crispr_direction == "right":
-		genomic_start = new_range[0] + crispr_dict["index"][0]
-		genomic_end = (genomic_start + len(crispr_seq)) - 1
-		genomic_location = str(genomic_start) + "-" + str(genomic_end)
-
-	elif crispr_direction == "left":
-		genomic_start = new_range[1] - crispr_dict["index"][0]
-		genomic_end = (genomic_start - len(crispr_seq)) + 1
-		genomic_location = str(genomic_end) + "-" + str(genomic_start)
-
-	return crispr_seq, genomic_location
-
 
 def get_genomic_crisprs(pam_sequence, pam_window, protospacer_length):
 
@@ -165,12 +86,12 @@ def get_genomic_crisprs(pam_sequence, pam_window, protospacer_length):
 													 "gRNA_Target_Sequence", "Location", "Direction"])
 
 	for chr in chromosomes:
-		if os.path.exists(os.getcwd() + "/../../extra_data/dna_chromosome_" + chr + ".fa"):
+		if os.path.exists(input_path + "chromosomes/dna_chromosome_" + chr + ".fa"):
 			crisprs_df = pandas.DataFrame(
 				columns=["CRISPR_PAM_Sequence", "gRNA_Target_Sequence", "Location", "Direction"])
 
 			# Read fasta file
-			file = os.getcwd() + "/../../extra_data/dna_chromosome_" + chr + ".fa"
+			file = input_path + "chromosomes/dna_chromosome_" + chr + ".fa"
 			fasta_file = SeqIO.read(file, "fasta")
 
 			# Extract chromosome sequence
@@ -185,11 +106,11 @@ def get_genomic_crisprs(pam_sequence, pam_window, protospacer_length):
 			chr_range = [int(start), int(end)]
 
 			# PAM specific CRISPR location finding across chromosome
-			right_chr_crispr = find_pam_protospacer_genome(
+			right_chr_crispr = find_pam_protospacer(
 				sequence=sequence, pam_sequence=pam_sequence,
 				pam_window=pam_window, protospacer_length=protospacer_length)
 
-			left_chr_crispr = find_pam_protospacer_genome(
+			left_chr_crispr = find_pam_protospacer(
 				sequence=reverse_sequence, pam_sequence=pam_sequence,
 				pam_window=pam_window, protospacer_length=protospacer_length)
 
@@ -209,9 +130,10 @@ def get_genomic_crisprs(pam_sequence, pam_window, protospacer_length):
 			crisprs_df["Chromosome"] = chr
 			chromosome_crisprs = pandas.concat([chromosome_crisprs, crisprs_df])
 
-	chromosome_crisprs.to_csv(path + args["OUTPUT_FILE"] + "_genome_guides.csv", index=False)
+	chromosome_crisprs.to_csv(output_path + "_genome_guides.csv", index=False)
 
 	return chromosome_crisprs
+
 
 
 ###########################################################################################
