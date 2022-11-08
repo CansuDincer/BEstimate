@@ -84,7 +84,7 @@ def find_pam_protospacer(sequence, pam_sequence, pam_window, protospacer_length)
 	gene parts. The indices are indicated when the first index of the gene is 1.
 	"""
 	# Since python index starts from 0, decrease the start position index given from the user
-	pam_window = [pam_window[0] - 1, pam_window[1]]
+	pam_window = [int(pam_window[0]) - 1, int(pam_window[1])]
 
 	# Using Regular Expressions, specify PAM pattern
 	pam_pattern = ""
@@ -116,7 +116,7 @@ def find_pam_protospacer(sequence, pam_sequence, pam_window, protospacer_length)
 	if crisprs is not []: print("CRISPRs are found!")
 	return crisprs
 
-def add_genomic_location(sequence_range, crispr_dict, crispr_direction, strand):
+def add_genomic_location(sequence_range, crispr_dict, crispr_direction, strand, chromosome):
 	"""
 	Adding genomic location info on crisprs found by extract_activity_window() function.
 	:param sequence_range: The range of the sequence on the genome (from Ensembl)
@@ -130,9 +130,9 @@ def add_genomic_location(sequence_range, crispr_dict, crispr_direction, strand):
 
 	new_range = []
 	if strand == 1:
-		new_range = sequence_range
+		new_range = [int(sequence_range[0]), int(sequence_range[1])]
 	elif strand == -1:
-		new_range = [sequence_range[1], sequence_range[0]]
+		new_range = [int(sequence_range[1]), int(sequence_range[0])]
 
 	# Look for both direction
 	crispr_seq, genomic_location = crispr_dict["crispr"], ""
@@ -140,12 +140,12 @@ def add_genomic_location(sequence_range, crispr_dict, crispr_direction, strand):
 	if crispr_direction == "right":
 		genomic_start = new_range[0] + crispr_dict["index"][0]
 		genomic_end = (genomic_start + len(crispr_seq)) - 1
-		genomic_location = str(genomic_start) + "-" + str(genomic_end)
+		genomic_location = str(chromosome) + ":" + str(genomic_start) + "-" + str(genomic_end)
 
 	elif crispr_direction == "left":
 		genomic_start = new_range[1] - crispr_dict["index"][0]
 		genomic_end = (genomic_start - len(crispr_seq)) + 1
-		genomic_location = str(genomic_end) + "-" + str(genomic_start)
+		genomic_location = str(chromosome) + ":" + str(genomic_end) + "-" + str(genomic_start)
 
 	return crispr_seq, genomic_location
 
@@ -156,8 +156,8 @@ def get_genomic_crisprs(pam_sequence, pam_window, protospacer_length):
 
 	chromosomes = [str(x) for x in list(range(1, 23))] + ["X", "Y"]
 
-	chromosome_crisprs = pandas.DataFrame(columns = ["Chromosome", "CRISPR_PAM_Sequence",
-													 "gRNA_Target_Sequence", "Location", "Direction"])
+	chromosome_crisprs = pandas.DataFrame(columns = ["Chromosome", "CRISPR_PAM_Sequence", "gRNA_Target_Sequence",
+													 "Location", "Direction", "Strand"])
 
 	for chr in chromosomes:
 		if os.path.exists(input_path + "chromosomes/dna_chromosome_" + chr + ".fa"):
@@ -192,14 +192,22 @@ def get_genomic_crisprs(pam_sequence, pam_window, protospacer_length):
 
 			for direction, crispr in crisprs_dict.items():
 				for cr in crispr:
-					crispr_seq, genomic_location = add_genomic_location(sequence_range=chr_range, strand=1,
-																		crispr_dict=cr, crispr_direction=direction)
+					crispr_seq_forw, genomic_location = add_genomic_location(sequence_range=chr_range, strand=1, chromosome = chr,
+																			 crispr_dict=cr, crispr_direction=direction)
+					crispr_seq_backw, genomic_location = add_genomic_location(sequence_range=chr_range, strand=-1, chromosome = chr,
+																			  crispr_dict=cr, crispr_direction=direction)
 
-					df = pandas.DataFrame([[crispr_seq, crispr_seq[:-len(pam_sequence)],
-											chr + ":" + genomic_location, direction]],
-										  columns=["CRISPR_PAM_Sequence", "gRNA_Target_Sequence",
-												   "Location", "Direction"])
-					crisprs_df = pandas.concat([crisprs_df, df])
+					forw_df = pandas.DataFrame([[crispr_seq_forw, crispr_seq_forw[:-len(pam_sequence)],
+												 genomic_location, direction, 1]],
+											   columns=["CRISPR_PAM_Sequence", "gRNA_Target_Sequence",
+														"Location", "Direction", "Strand"])
+					crisprs_df = pandas.concat([crisprs_df, forw_df])
+					backw_df = pandas.DataFrame([[crispr_seq_backw, crispr_seq_backw[:-len(pam_sequence)],
+												  genomic_location, direction, -1]],
+												columns=["CRISPR_PAM_Sequence", "gRNA_Target_Sequence",
+														 "Location", "Direction", "Strand"])
+					crisprs_df = pandas.concat([crisprs_df, backw_df])
+
 
 			crisprs_df["Chromosome"] = chr
 			chromosome_crisprs = pandas.concat([chromosome_crisprs, crisprs_df])
