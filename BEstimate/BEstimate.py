@@ -31,10 +31,10 @@ def take_input():
 
 	# BASIC INFORMATION
 
-	parser.add_argument("-gene", dest="GENE", required=True,
+	parser.add_argument("-gene", dest="GENE",
 						help="The hugo symbol of the interested gene!")
 
-	parser.add_argument("-assembly", dest="ASSEMBLY", required=True,
+	parser.add_argument("-assembly", dest="ASSEMBLY",
 						help="The genome assembly that will be used!")
 
 	parser.add_argument("-transcript", dest="TRANSCRIPT", default=None,
@@ -89,6 +89,9 @@ def take_input():
 
 	parser.add_argument("-o", dest="OUTPUT_PATH", default=os.getcwd() + "/",
 						help="The path for output. If not specified the current directory will be used!")
+
+	parser.add_argument("-i", dest="INPUT_FILE", default="output",
+						help="The input file name, if not specified \"position\" will be used!")
 
 	parser.add_argument("-ofile", dest="OUTPUT_FILE", default="output",
 						help="The output file name, if not specified \"position\" will be used!")

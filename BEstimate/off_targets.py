@@ -9,56 +9,12 @@
 
 # Import necessary packages
 import os, pandas, argparse
-from BEstimate.BEstimate.BEstimate import find_pam_protospacer, add_genomic_location
+from BEstimate.BEstimate.BEstimate import find_pam_protospacer, add_genomic_location, take_input
 from Bio import SeqIO
 
 
 # -----------------------------------------------------------------------------------------#
 # Take inputs
-
-def take_input():
-	parser = argparse.ArgumentParser(prog="BEstimate",
-									 usage="%(prog)s [inputs]",
-									 description="""
-                                     **********************************
-                                     Find and Analyse Base Editor sites
-                                     		 Off Target Analysis
-                                     **********************************""")
-
-	for group in parser._action_groups:
-		if group.title == "optional arguments":
-			group.title = "Inputs"
-		elif "positional arguments":
-			group.title = "Mandatory Inputs"
-
-	# PAM AND PROTOSPACER INFORMATION
-
-	# The NGG PAM will be used unless otherwise specified.
-	parser.add_argument("-pamseq", dest="PAMSEQ", default="NGG",
-						help="The PAM sequence in which features used "
-							 "for searching activity window and editable nucleotide.")
-	parser.add_argument("-pamwin", dest="PAMWINDOW", default="21-23",
-						help="The index of the PAM sequence when starting "
-							 "from the first index of protospacer as 1.")
-	parser.add_argument("-protolen", dest="PROTOLEN", default="20",
-						help="The total protospacer and PAM length.")
-
-
-	# OUTPUT
-
-	parser.add_argument("-o", dest="OUTPUT_PATH", default=os.getcwd() + "/",
-						help="The path for output. If not specified the current directory will be used!")
-
-	parser.add_argument("-ofile", dest="OUTPUT_FILE", default="output",
-						help="The output file name, if not specified \"position\" will be used!")
-	parser.add_argument("-ifile", dest="INPUT_FILE", default="output",
-						help="The input file name, if not specified \"position\" will be used!")
-
-	parsed_input = parser.parse_args()
-	input_dict = vars(parsed_input)
-
-	return input_dict
-
 
 args = take_input()
 
@@ -130,7 +86,7 @@ def get_genomic_crisprs(pam_sequence, pam_window, protospacer_length):
 			crisprs_df["Chromosome"] = chr
 			chromosome_crisprs = pandas.concat([chromosome_crisprs, crisprs_df])
 
-	chromosome_crisprs.to_csv(output_path + "_genome_guides.csv", index=False)
+	chromosome_crisprs.to_csv(output_path + args["PAMSEQ"] + "_genome_guides.csv", index=False)
 
 	return chromosome_crisprs
 
