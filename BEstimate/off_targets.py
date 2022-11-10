@@ -95,7 +95,7 @@ def find_pam_protospacer(sequence, pam_sequence, pam_window, protospacer_length)
 			pam_pattern += "[ATCG]{1}"
 
 	# Search protospacer length of nucleatide sequence and add PAM pattern after that
-	pattern = r'[ATCG]{%s}%s' % (protospacer_length, pam_pattern)
+	pattern = r'[ATCG]{%s}%s' % (str(protospacer_length), pam_pattern)
 
 	crisprs = []
 	for nuc_index in range(0, len(sequence)):
@@ -177,11 +177,13 @@ def get_genomic_crisprs(pam_sequence, pam_window, protospacer_length):
 		# PAM specific CRISPR location finding across chromosome
 		right_chr_crispr = find_pam_protospacer(
 			sequence=sequence, pam_sequence=pam_sequence,
-			pam_window=pam_window, protospacer_length=protospacer_length)
+			pam_window=[pam_window.split("-")[0], pam_window.split("-")[1]],
+			protospacer_length=protospacer_length)
 
 		left_chr_crispr = find_pam_protospacer(
 			sequence=reverse_sequence, pam_sequence=pam_sequence,
-			pam_window=pam_window, protospacer_length=protospacer_length)
+			pam_window=[pam_window.split("-")[0], pam_window.split("-")[1]],
+			protospacer_length=protospacer_length)
 
 		crisprs_dict = {"left": right_chr_crispr, "right": left_chr_crispr}
 		for direction, crispr in crisprs_dict.items():
