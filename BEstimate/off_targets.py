@@ -49,6 +49,8 @@ def take_input():
 						help="The path for output. If not specified the current directory will be used!")
 	parser.add_argument("-i", dest="INPUT_PATH", default=os.getcwd() + "/",
 						help="The path for input. If not specified the current directory will be used!")
+	parser.add_argument("-c", dest="CHROMOSOME", default=os.getcwd() + "/",
+						help="The path for input. If not specified the current directory will be used!")
 
 	parsed_input = parser.parse_args()
 	input_dict = vars(parsed_input)
@@ -98,11 +100,9 @@ def find_pam_protospacer(sequence, pam_sequence, pam_window, protospacer_length)
 	pattern = r'[ATCG]{%s}%s' % (str(protospacer_length), pam_pattern)
 
 	crisprs = []
-	for nuc_index in range(0, len(sequence)):
-
+	for nuc_index in range(len(sequence)):
 		# One by one in the given sequence
 		if nuc_index + pam_window[1] <= len(sequence):
-
 			# Add started nucleotide index total length of targeted base editing site (PAM index)
 			sub_sequence = sequence[nuc_index:nuc_index + pam_window[1]]
 
@@ -147,7 +147,7 @@ def add_genomic_location(sequence_range, crispr_dict, crispr_direction, strand, 
 	return crispr_seq, genomic_location
 
 
-def get_genomic_crisprs(pam_sequence, pam_window, protospacer_length):
+def get_genomic_crisprs(pam_sequence, pam_window, protospacer_length, chromosome):
 
 	nucleotide_dict = {"A": "T", "T": "A", "G": "C", "C": "G", "N": "N"}
 
@@ -156,60 +156,56 @@ def get_genomic_crisprs(pam_sequence, pam_window, protospacer_length):
 	chromosome_crisprs = pandas.DataFrame(columns = ["Chromosome", "CRISPR_PAM_Sequence", "gRNA_Target_Sequence",
 													 "Location", "Direction", "Strand"])
 
-	for chr in chromosomes:
-		print(chr)
-		crisprs_df = pandas.DataFrame(columns=["CRISPR_PAM_Sequence", "gRNA_Target_Sequence", "Location", "Direction"])
+	crisprs_df = pandas.DataFrame(columns=["CRISPR_PAM_Sequence", "gRNA_Target_Sequence", "Location", "Direction"])
 
-		# Read fasta file
-		file = input_path + "dna_chromosome_" + chr + ".fa"
-		fasta_file = SeqIO.read(file, "fasta")
+	# Read fasta file
+	file = input_path + "dna_chromosome_" + chromosome + ".fa"
+	fasta_file = SeqIO.read(file, "fasta")
 
-		# Extract chromosome sequence
-		sequence = str(fasta_file.seq)
+	# Extract chromosome sequence
+	sequence = str(fasta_file.seq)
 
-		# Reverse sequence for complementary DNA strand
-		reverse_sequence = "".join([nucleotide_dict[n] for n in sequence[::-1]])
+	# Reverse sequence for complementary DNA strand
+	reverse_sequence = "".join([nucleotide_dict[n] for n in sequence[::-1]])
 
-		# Sequence range
-		start = fasta_file.description.split(" ")[2].split(":")[-3]
-		end = fasta_file.description.split(" ")[2].split(":")[-2]
-		chr_range = [int(start), int(end)]
-		# PAM specific CRISPR location finding across chromosome
-		right_chr_crispr = find_pam_protospacer(
-			sequence=sequence, pam_sequence=pam_sequence,
-			pam_window=[pam_window.split("-")[0], pam_window.split("-")[1]],
-			protospacer_length=protospacer_length)
+	# Sequence range
+	start = fasta_file.description.split(" ")[2].split(":")[-3]
+	end = fasta_file.description.split(" ")[2].split(":")[-2]
+	chr_range = [int(start), int(end)]
+	# PAM specific CRISPR location finding across chromosome
+	right_chr_crispr = find_pam_protospacer(
+		sequence=sequence, pam_sequence=pam_sequence,
+		pam_window=[pam_window.split("-")[0], pam_window.split("-")[1]],
+		protospacer_length=protospacer_length)
 
-		left_chr_crispr = find_pam_protospacer(
-			sequence=reverse_sequence, pam_sequence=pam_sequence,
-			pam_window=[pam_window.split("-")[0], pam_window.split("-")[1]],
-			protospacer_length=protospacer_length)
+	left_chr_crispr = find_pam_protospacer(
+		sequence=reverse_sequence, pam_sequence=pam_sequence,
+		pam_window=[pam_window.split("-")[0], pam_window.split("-")[1]],
+		protospacer_length=protospacer_length)
 
-		crisprs_dict = {"left": right_chr_crispr, "right": left_chr_crispr}
-		for direction, crispr in crisprs_dict.items():
-			for cr in crispr:
-				crispr_seq_forw, genomic_location = add_genomic_location(sequence_range=chr_range, strand=1, chromosome = chr,
-																		 crispr_dict=cr, crispr_direction=direction)
-				crispr_seq_backw, genomic_location = add_genomic_location(sequence_range=chr_range, strand=-1, chromosome = chr,
-																		  crispr_dict=cr, crispr_direction=direction)
+	crisprs_dict = {"left": right_chr_crispr, "right": left_chr_crispr}
+	for direction, crispr in crisprs_dict.items():
+		for cr in crispr:
+			crispr_seq_forw, genomic_location = add_genomic_location(sequence_range=chr_range, strand=1, chromosome = chr,
+																	 crispr_dict=cr, crispr_direction=direction)
+			crispr_seq_backw, genomic_location = add_genomic_location(sequence_range=chr_range, strand=-1, chromosome = chr,
+																	  crispr_dict=cr, crispr_direction=direction)
 
-				forw_df = pandas.DataFrame([[crispr_seq_forw, crispr_seq_forw[:-len(pam_sequence)],
-											 genomic_location, direction, 1]],
-										   columns=["CRISPR_PAM_Sequence", "gRNA_Target_Sequence",
-													"Location", "Direction", "Strand"])
-				crisprs_df = pandas.concat([crisprs_df, forw_df])
-				backw_df = pandas.DataFrame([[crispr_seq_backw, crispr_seq_backw[:-len(pam_sequence)],
-											  genomic_location, direction, -1]],
-											columns=["CRISPR_PAM_Sequence", "gRNA_Target_Sequence",
-													 "Location", "Direction", "Strand"])
-				crisprs_df = pandas.concat([crisprs_df, backw_df])
-				if len(crisprs_df.index) > 0:
-					print("yes crisprs")
+			forw_df = pandas.DataFrame([[crispr_seq_forw, crispr_seq_forw[:-len(pam_sequence)],
+										 genomic_location, direction, 1]],
+									   columns=["CRISPR_PAM_Sequence", "gRNA_Target_Sequence",
+												"Location", "Direction", "Strand"])
+			crisprs_df = pandas.concat([crisprs_df, forw_df])
+			backw_df = pandas.DataFrame([[crispr_seq_backw, crispr_seq_backw[:-len(pam_sequence)],
+										  genomic_location, direction, -1]],
+										columns=["CRISPR_PAM_Sequence", "gRNA_Target_Sequence",
+												 "Location", "Direction", "Strand"])
+			crisprs_df = pandas.concat([crisprs_df, backw_df])
 
-		crisprs_df["Chromosome"] = chr
-		chromosome_crisprs = pandas.concat([chromosome_crisprs, crisprs_df])
+	crisprs_df["Chromosome"] = chromosome
+	chromosome_crisprs = pandas.concat([chromosome_crisprs, crisprs_df])
 
-	chromosome_crisprs.to_csv(output_path + args["PAMSEQ"] + "_genome_guides.csv", index=False)
+	chromosome_crisprs.to_csv(output_path + args["PAMSEQ"] + "_" + chromosome + "_genome_guides.csv", index=False)
 
 	return chromosome_crisprs
 
@@ -222,9 +218,10 @@ def get_genomic_crisprs(pam_sequence, pam_window, protospacer_length):
 def main():
 	print("Starting..")
 	_ = get_genomic_crisprs(pam_sequence= args["PAMSEQ"], pam_window=args["PAMWINDOW"],
-							protospacer_length= args["PROTOLEN"])
+							protospacer_length= args["PROTOLEN"], chromosome=args["CHROMOSOME"])
 
-	return "Genomic guides were collected for GRCh38 genome assembly - %s PAM" % args["PAMSEQ"]
+	return "Genomic guides of chromosome %s were collected for GRCh38 genome assembly - %s PAM" \
+		   % (args["CHROMOSOME"], args["PAMSEQ"])
 
 
 main()
