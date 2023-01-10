@@ -291,108 +291,108 @@ class Ensembl:
 
 		# Sequence
 		label_line = seq_request.text.split("\n")[0]
-		print(label_line)
-		print("The location of the interested gene: %s\n" % label_line.split(" ")[1])
-		flan_label_line = seq_flan_request.text.split("\n")[0]
-		self.sequence = "".join(seq_request.text.split("\n")[1:])
-		self.flan_sequence = "".join(seq_flan_request.text.split("\n")[1:])
-		self.gene_range = [int(label_line.split(":")[-3]), int(label_line.split(":")[-2])]
-		self.flan_gene_range = [int(flan_label_line.split(":")[-3]),
-								int(flan_label_line.split(":")[-2])]
-		self.strand = int(label_line.split(":")[-1].strip())
-		self.chromosome = label_line.split(":")[2].strip()
+		if label_line[0] != "{":
+			#print("The location of the interested gene: %s\n" % label_line.split(" ")[1])
+			flan_label_line = seq_flan_request.text.split("\n")[0]
+			self.sequence = "".join(seq_request.text.split("\n")[1:])
+			self.flan_sequence = "".join(seq_flan_request.text.split("\n")[1:])
+			self.gene_range = [int(label_line.split(":")[-3]), int(label_line.split(":")[-2])]
+			self.flan_gene_range = [int(flan_label_line.split(":")[-3]),
+									int(flan_label_line.split(":")[-2])]
+			self.strand = int(label_line.split(":")[-1].strip())
+			self.chromosome = label_line.split(":")[2].strip()
 
-		# If strand is -1, the sequence has been reversed to be in 5'->3' direction
-		# The genomic location should be reverse to match with the sequence too.
-		if self.strand == -1: self.gene_range = [self.gene_range[1], self.gene_range[0]]
-		if self.strand == -1: self.flan_gene_range = \
-			[self.flan_gene_range[1], self.flan_gene_range[0]]
+			# If strand is -1, the sequence has been reversed to be in 5'->3' direction
+			# The genomic location should be reverse to match with the sequence too.
+			if self.strand == -1: self.gene_range = [self.gene_range[1], self.gene_range[0]]
+			if self.strand == -1: self.flan_gene_range = \
+				[self.flan_gene_range[1], self.flan_gene_range[0]]
 
-		# Preparation of the Ensembl sequence for analysis
+			# Preparation of the Ensembl sequence for analysis
 
-		nucleotide_dict = {"A": "T", "T": "A", "G": "C", "C": "G", "N": "N"}
+			nucleotide_dict = {"A": "T", "T": "A", "G": "C", "C": "G", "N": "N"}
 
-		if mutations is None:
+			if mutations is None:
 
-			if self.strand == 1:
-				self.right_sequence_analysis = self.sequence
-				self.flan_right_sequence_analysis = self.flan_sequence
-				self.left_sequence_analysis = "".join([nucleotide_dict[n] for n in self.sequence[::-1]])
-				self.flan_left_sequence_analysis = "".join([nucleotide_dict[n] for n in self.flan_sequence[::-1]])
+				if self.strand == 1:
+					self.right_sequence_analysis = self.sequence
+					self.flan_right_sequence_analysis = self.flan_sequence
+					self.left_sequence_analysis = "".join([nucleotide_dict[n] for n in self.sequence[::-1]])
+					self.flan_left_sequence_analysis = "".join([nucleotide_dict[n] for n in self.flan_sequence[::-1]])
 
-			elif self.strand == -1:
-				self.left_sequence_analysis = self.sequence
-				self.flan_left_sequence_analysis = self.flan_sequence
-				self.right_sequence_analysis = "".join([nucleotide_dict[n] for n in self.left_sequence_analysis[::-1]])
-				self.flan_right_sequence_analysis = "".join(
-					[nucleotide_dict[n] for n in self.flan_left_sequence_analysis[::-1]])
+				elif self.strand == -1:
+					self.left_sequence_analysis = self.sequence
+					self.flan_left_sequence_analysis = self.flan_sequence
+					self.right_sequence_analysis = "".join([nucleotide_dict[n] for n in self.left_sequence_analysis[::-1]])
+					self.flan_right_sequence_analysis = "".join(
+						[nucleotide_dict[n] for n in self.flan_left_sequence_analysis[::-1]])
 
-		else:
-			for mutation in mutations:
-				if mutation.split(":")[0] == self.chromosome:
-					if mutation.split(":")[1].split(".")[0] == "g":
-						alteration = mutation.split(":")[1].split(".")[1]
-						mutation_location = int(re.match("([0-9]+)([a-z]+)", alteration.split(">")[0], re.I).groups()[0])
-						altered_nuc = re.match("([0-9]+)([a-z]+)", alteration.split(">")[0], re.I).groups()[1]
-						new_nuc = alteration.split(">")[1]
+			else:
+				for mutation in mutations:
+					if mutation.split(":")[0] == self.chromosome:
+						if mutation.split(":")[1].split(".")[0] == "g":
+							alteration = mutation.split(":")[1].split(".")[1]
+							mutation_location = int(re.match("([0-9]+)([a-z]+)", alteration.split(">")[0], re.I).groups()[0])
+							altered_nuc = re.match("([0-9]+)([a-z]+)", alteration.split(">")[0], re.I).groups()[1]
+							new_nuc = alteration.split(">")[1]
 
-						# Check if altered nucleotide is in the given location
-						if self.strand == 1:
-							genomic_start = int(self.gene_range[0])
-							genomic_flan_start = int(self.flan_gene_range[0])
+							# Check if altered nucleotide is in the given location
+							if self.strand == 1:
+								genomic_start = int(self.gene_range[0])
+								genomic_flan_start = int(self.flan_gene_range[0])
 
-							if self.sequence[mutation_location - genomic_start] == altered_nuc:
-								# Altered nucleotide in the given mutation fits with the sequence
-								s = list(self.sequence)
-								s[mutation_location - genomic_start] = new_nuc
-								self.sequence = "".join(s)
-							else:
-								print("\nGiven mutation location does not fit with the sequence."
-									  "Nucleotides are different.\n")
+								if self.sequence[mutation_location - genomic_start] == altered_nuc:
+									# Altered nucleotide in the given mutation fits with the sequence
+									s = list(self.sequence)
+									s[mutation_location - genomic_start] = new_nuc
+									self.sequence = "".join(s)
+								else:
+									print("\nGiven mutation location does not fit with the sequence."
+										  "Nucleotides are different.\n")
 
-							if self.flan_sequence[mutation_location - genomic_flan_start] == altered_nuc:
-								# Altered nucleotide in the given mutation fits with the sequence
-								s = list(self.flan_sequence)
-								s[mutation_location - genomic_flan_start] = new_nuc
-								self.flan_sequence = "".join(s)
-							else:
-								print("\nGiven mutation location does not fit with the sequence."
-									  "Nucleotides are different.\n")
+								if self.flan_sequence[mutation_location - genomic_flan_start] == altered_nuc:
+									# Altered nucleotide in the given mutation fits with the sequence
+									s = list(self.flan_sequence)
+									s[mutation_location - genomic_flan_start] = new_nuc
+									self.flan_sequence = "".join(s)
+								else:
+									print("\nGiven mutation location does not fit with the sequence."
+										  "Nucleotides are different.\n")
 
-							self.right_sequence_analysis = self.sequence
-							self.flan_right_sequence_analysis = self.flan_sequence
-							self.left_sequence_analysis = "".join(
-								[nucleotide_dict[n] for n in self.sequence[::-1]])
-							self.flan_left_sequence_analysis = "".join(
-								[nucleotide_dict[n] for n in self.flan_sequence[::-1]])
+								self.right_sequence_analysis = self.sequence
+								self.flan_right_sequence_analysis = self.flan_sequence
+								self.left_sequence_analysis = "".join(
+									[nucleotide_dict[n] for n in self.sequence[::-1]])
+								self.flan_left_sequence_analysis = "".join(
+									[nucleotide_dict[n] for n in self.flan_sequence[::-1]])
 
-						elif self.strand == -1:
-							genomic_end = int(self.gene_range[1])
-							genomic_flan_end = int(self.flan_gene_range[1])
+							elif self.strand == -1:
+								genomic_end = int(self.gene_range[1])
+								genomic_flan_end = int(self.flan_gene_range[1])
 
-							if self.sequence[genomic_end - (mutation_location + 1)] == altered_nuc:
-								# Altered nucleotide in the given mutation fits with the sequence
-								s = list(self.sequence)
-								s[genomic_end - (mutation_location + 1)] = new_nuc
-								self.sequence = "".join(s)
-							else:
-								print("\nGiven mutation location does not fit with the sequence."
-									  "\nNucleotides are different.\n")
-							if self.flan_sequence[genomic_flan_end - (mutation_location + 1)] == altered_nuc:
-								# Altered nucleotide in the given mutation fits with the sequence
-								s = list(self.flan_sequence)
-								s[genomic_flan_end - (mutation_location + 1)] = new_nuc
-								self.flan_sequence = "".join(s)
-							else:
-								print("\nGiven mutation location does not fit with the sequence."
-									  "\nNucleotides are different.\n")
+								if self.sequence[genomic_end - (mutation_location + 1)] == altered_nuc:
+									# Altered nucleotide in the given mutation fits with the sequence
+									s = list(self.sequence)
+									s[genomic_end - (mutation_location + 1)] = new_nuc
+									self.sequence = "".join(s)
+								else:
+									print("\nGiven mutation location does not fit with the sequence."
+										  "\nNucleotides are different.\n")
+								if self.flan_sequence[genomic_flan_end - (mutation_location + 1)] == altered_nuc:
+									# Altered nucleotide in the given mutation fits with the sequence
+									s = list(self.flan_sequence)
+									s[genomic_flan_end - (mutation_location + 1)] = new_nuc
+									self.flan_sequence = "".join(s)
+								else:
+									print("\nGiven mutation location does not fit with the sequence."
+										  "\nNucleotides are different.\n")
 
-							self.left_sequence_analysis = self.sequence
-							self.flan_left_sequence_analysis = self.flan_sequence
-							self.right_sequence_analysis = "".join(
-								[nucleotide_dict[n] for n in self.left_sequence_analysis[::-1]])
-							self.flan_right_sequence_analysis = "".join(
-								[nucleotide_dict[n] for n in self.flan_left_sequence_analysis[::-1]])
+								self.left_sequence_analysis = self.sequence
+								self.flan_left_sequence_analysis = self.flan_sequence
+								self.right_sequence_analysis = "".join(
+									[nucleotide_dict[n] for n in self.left_sequence_analysis[::-1]])
+								self.flan_right_sequence_analysis = "".join(
+									[nucleotide_dict[n] for n in self.flan_left_sequence_analysis[::-1]])
 
 	def extract_gRNA_flan_sequence(self, location, direction, fivep, threep):
 		"""
@@ -419,154 +419,6 @@ class Ensembl:
 
 		return grna_flan_request.text
 
-	"""
-	def extract_info(self, chromosome, loc_start, loc_end, transcript=None):
-
-		ensembl = "/overlap/region/human/%s:%s-%s?feature=transcript;feature=exon;feature=mane;" \
-				  "feature=cds" % (
-			chromosome, int(loc_start), int(loc_end))
-
-		request = requests.get(self.server + ensembl, headers={"Content-Type": "application/json"})
-
-		info_dict = dict()
-
-		if request.status_code != 200:
-			print("No response from ensembl!")
-		else:
-			canonicals = list()
-			for output in request.json():
-				if transcript is None:
-					if output["feature_type"] == "mane" and output["Parent"] == self.gene_id:
-						if output["id"].split(".")[0] not in canonicals:
-							canonicals.append(output["id"].split(".")[0])
-
-						if output["id"].split(".")[0] in canonicals:
-							if output["id"] not in info_dict.keys():
-								info_dict[output["id"]] = \
-									[{"start": output["start"], "end": output["end"]}]
-
-							else:
-								old_val = info_dict[output["id"]]
-								if {"start": output["start"], "end": output["end"]} not in old_val:
-									old_val.append(
-										{"start": output["start"], "end": output["end"]})
-									info_dict[output["id"]] = old_val
-
-					if output["feature_type"] == "transcript" and output["Parent"] == self.gene_id:
-						if "is_canonical" in output.keys():
-							if output["is_canonical"] == 1:
-								if output["id"].split(".")[0] not in canonicals:
-									canonicals.append(output["id"].split(".")[0])
-						
-						if "source" in output.keys():
-							if output["source"] == "ensembl_havana":
-								if output["id"].split(".")[0] not in canonicals:
-									canonicals.append(output["id"].split(".")[0])
-						
-						if output["id"].split(".")[0] in canonicals:
-							if output["id"] not in info_dict.keys():
-								info_dict[output["id"]] = \
-									[{"start": output["start"], "end": output["end"]}]
-
-							else:
-								old_val = info_dict[output["id"]]
-								if {"start": output["start"], "end": output["end"]} not in old_val:
-									old_val.append(
-										{"start": output["start"], "end": output["end"]})
-									info_dict[output["id"]] = old_val
-				else:
-					# Selected transcript
-					if output["feature_type"] == "transcript" and output["Parent"] == self.gene_id:
-						transcript_info = "/lookup/id/%s?expand=1;mane=1" % output["transcript_id"]
-						transcript_request = requests.get(self.server + transcript_info,
-														  headers={"Content-Type": "application/json"})
-						transcript_output = transcript_request.json()
-						if output["transcript_id"] not in info_dict.keys():
-							info_dict[output["transcript_id"]] = \
-								[{"start": transcript_output["start"], "end": transcript_output["end"]}]
-
-						else:
-							old_val = info_dict[output["transcript_id"]]
-							if {"start": transcript_request["start"], "end": transcript_request["end"]} not in old_val:
-								old_val.append(
-									{"start": transcript_request["start"], "end": transcript_request["end"]})
-								info_dict[output["transcript_id"]] = old_val
-
-			for output in request.json():
-				if output["feature_type"] == "cds" and info_dict != {} and output["Parent"] in info_dict.keys():
-					for k in range(len(info_dict[output["Parent"]])):
-						d = info_dict[output["Parent"]][k]
-						coding_pos = list(range(output["start"], output["end"] + 1))
-						if "cds" not in d.keys():
-							d["cds"] = {output["protein_id"]: coding_pos}
-						else:
-							if output["protein_id"] not in d["cds"].keys():
-								d["cds"][output["protein_id"]] = coding_pos
-							else:
-								t = d["cds"][output["protein_id"]]
-								for i in coding_pos:
-									if i not in t:
-										t.append(i)
-								d["cds"][output["protein_id"]] = t
-						if d not in info_dict[output["Parent"]]:
-							info_dict[output["Parent"]][k] = d
-
-			protein_ids = list()
-			swiss_protein_ids = list()
-			selected_protein_ids = list()
-			selected_transcript = list()
-			for ids in info_dict.keys():
-				for d in info_dict[ids]:
-					protein_ids.extend(d["cds"].keys())
-			if protein_ids:
-				for p in protein_ids:
-					protein_ensembl = "/xrefs/id/{0}?external_db=Uniprot/SWISSPROT%".format(p)
-					protein_request = requests.get(self.server + protein_ensembl,
-												   headers={"Content-Type": "application/json"})
-					for i in protein_request.json():
-						if i["dbname"] == "Uniprot/SWISSPROT":
-							swiss_protein_ids.append(p)
-							if "ensembl_end" in i.keys() and "ensembl_start" in i.keys() and \
-									"xref_end" in i.keys() and "xref_start" in i.keys():
-								selected_protein_ids.append(p)
-				if selected_protein_ids:
-					for p in selected_protein_ids:
-						for ids in info_dict.keys():
-							for d in info_dict[ids]:
-								if p in d["cds"].keys():
-									if ids not in selected_transcript:
-										selected_transcript.append(ids)
-				else:
-					if swiss_protein_ids:
-						for p in swiss_protein_ids:
-							for ids in info_dict.keys():
-								for d in info_dict[ids]:
-									if p in d["cds"].keys():
-										if ids not in selected_transcript:
-											selected_transcript.append(ids)
-					else:
-						selected_transcript = list(info_dict.keys())
-			else:
-				selected_transcript = list(info_dict.keys())
-
-			if selected_transcript:
-				info_dict2 = {key : info_dict[key] for key in info_dict.keys() if key in selected_transcript}
-
-			for output in request.json():
-				if output["feature_type"] == "exon" and info_dict2 != {} and output["Parent"] in info_dict2.keys():
-					for d in info_dict2[output["Parent"]]:
-						if "exon" not in d.keys():
-							d["exon"] = {output["exon_id"]: {"start": output["start"], "end": output["end"]}}
-						else:
-							if output["exon_id"] not in d["exon"].keys():
-								d["exon"][output["exon_id"]] = {"start": output["start"], "end": output["end"]}
-
-		if info_dict2 != {}:
-			self.info_dict = info_dict2
-			return 1
-		else:
-			return 0
-	"""
 	def extract_info(self, chromosome, loc_start, loc_end, transcript=None):
 
 		if loc_start < loc_end:
@@ -585,25 +437,28 @@ class Ensembl:
 		if request.status_code != 200:
 			print("No response from ensembl!")
 		else:
+			print("TRANSCRIPT")
 			canonicals = list()
 			for output in request.json():
 				if transcript is None:
 					if output["feature_type"] == "mane" and output["Parent"] == self.gene_id:
-						if output["id"].split(".")[0] not in canonicals:
-							canonicals.append(output["id"].split(".")[0])
+						if "refseq_match" in output.keys():
+							if output["type"] != "MANE_Plus_Clinical":
+								if output["id"].split(".")[0] not in canonicals:
+									canonicals.append(output["id"].split(".")[0])
 
-						if output["id"].split(".")[0] in canonicals:
-							if output["id"] not in info_dict.keys():
-								info_dict[output["id"]] = \
-									[{"start": output["start"], "end": output["end"]}]
+								if output["id"].split(".")[0] in canonicals:
+									if output["id"] not in info_dict.keys():
+										info_dict[output["id"]] = \
+											[{"start": output["start"], "end": output["end"]}]
 
-							else:
-								old_val = info_dict[output["id"]]
-								if {"start": output["start"], "end": output["end"]} not in old_val:
-									old_val.append(
-										{"start": output["start"], "end": output["end"]})
-									info_dict[output["id"]] = old_val
-
+									else:
+										old_val = info_dict[output["id"]]
+										if {"start": output["start"], "end": output["end"]} not in old_val:
+											old_val.append(
+												{"start": output["start"], "end": output["end"]})
+											info_dict[output["id"]] = old_val
+					"""
 					if output["feature_type"] == "transcript" and output["Parent"] == self.gene_id:
 						if "is_canonical" in output.keys():
 							if output["is_canonical"] == 1:
@@ -624,6 +479,7 @@ class Ensembl:
 									old_val.append(
 										{"start": output["start"], "end": output["end"]})
 									info_dict[output["id"]] = old_val
+					"""
 				else:
 					# Selected transcript
 					if output["feature_type"] == "transcript" and output["Parent"] == self.gene_id:
@@ -715,11 +571,9 @@ class Ensembl:
 									d["exon"][output["exon_id"]] = {"start": output["start"], "end": output["end"]}
 				if info_dict2 != {}:
 					self.info_dict = info_dict2
-					print("Selected Transcript ID is %s" % ", ".join(self.info_dict.keys()))
 					return 1
 			else:
 				self.info_dict = None
-				print("No selected Transcript ID")
 				return 0
 
 	def check_range_info(self, start, end):
