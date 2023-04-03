@@ -1063,7 +1063,7 @@ class Variant:
 # Data w/out API opportunity
 
 yulab = pandas.read_table(os.getcwd() + "/../data/H_sapiens_interfaces.txt")
-cosmic_freq = pandas.read_csv(os.getcwd() + "/data/all_frequency_df.csv", index_col=0)
+cosmic_freq = pandas.read_csv(os.getcwd() + "/../data/all_frequency_df.csv", index_col=0)
 
 
 # -----------------------------------------------------------------------------------------#
