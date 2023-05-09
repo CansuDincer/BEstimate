@@ -9,9 +9,8 @@
 
 # Import necessary packages
 import os, pandas, argparse, re, pickle
-from Bio import SeqIO
-from Bio import pairwise2
-from Bio.pairwise2 import format_alignment
+import itertools
+
 
 # -----------------------------------------------------------------------------------------#
 # Take inputs
@@ -34,22 +33,9 @@ def take_input():
 	# PAM AND PROTOSPACER INFORMATION
 
 	# The NGG PAM will be used unless otherwise specified.
-	parser.add_argument("-pamseq", dest="PAMSEQ", default="NGG",
-						help="The PAM sequence in which features used "
-							 "for searching activity window and editable nucleotide.")
-	parser.add_argument("-pamwin", dest="PAMWINDOW", default="21-23",
-						help="The index of the PAM sequence when starting "
-							 "from the first index of protospacer as 1.")
-	parser.add_argument("-protolen", dest="PROTOLEN", default="20",
-						help="The total protospacer and PAM length.")
-
-
-	# OUTPUT
-
-	parser.add_argument("-o", dest="OUTPUT_PATH", default=os.getcwd() + "/",
-						help="The path for output. If not specified the current directory will be used!")
-	parser.add_argument("-i", dest="INPUT_PATH", default=os.getcwd() + "/",
-						help="The path for input. If not specified the current directory will be used!")
+	parser.add_argument("-path", dest="PATH")
+	parser.add_argument("-file", dest="FILE")
+	parser.add_argument("-mm", dest="MM", default="4")
 
 	parsed_input = parser.parse_args()
 	input_dict = vars(parsed_input)
@@ -59,232 +45,218 @@ def take_input():
 
 args = take_input()
 
-output_path = ""
-if args["OUTPUT_PATH"][-1] == "/":
-	output_path = args["OUTPUT_PATH"]
-else:
-	output_path = args["OUTPUT_PATH"] + "/"
-
-input_path = ""
-if args["INPUT_PATH"][-1] == "/":
-	input_path = args["INPUT_PATH"]
-else:
-	input_path = args["INPUT_PATH"] + "/"
+ot_path = "/Volumes/team215/Cansu/BEstimate/off_targets/"
 
 # -----------------------------------------------------------------------------------------#
-# Functions
+# Take gRNAs
 
-def find_pam_protospacer(sequence, pam_sequence, pam_window, protospacer_length, strand, chromosome):
-	# Since python index starts from 0, decrease the start position index given from the user
-	pam_window = [int(pam_window[0]) - 1, int(pam_window[1])]
-
-	# Using Regular Expressions, specify PAM pattern
-	pam_pattern = ""
-	for nuc in list(pam_sequence):
-		if nuc != "N":
-			pam_pattern += nuc + "{1}"
-		else:
-			pam_pattern += "[ATCG]{1}"
-
-	# Search protospacer length of nucleatide sequence and add PAM pattern after that
-	pattern = r'[ATCG]{%s}%s' % (str(protospacer_length), pam_pattern)
-
-	crisprs = []
-	for nuc_index in range(len(sequence)):
-		# One by one in the given sequence
-		if nuc_index + pam_window[1] <= len(sequence):
-			# Add started nucleotide index total length of targeted base editing site (PAM index)
-			sub_sequence = sequence[nuc_index:nuc_index + pam_window[1]]
-
-			# Search regex pattern inside the sub sequence
-			for match_sequence in re.finditer(pattern, sub_sequence):
-				if strand == "1":
-					genomic_start = nuc_index + 1
-					genomic_end = (genomic_start + pam_window[1]) - 1
-				elif strand == "-1":
-					genomic_end = len(sequence) - nuc_index
-					genomic_start = (genomic_end - pam_window[1]) + 1
-				genomic_location = str(chromosome) + ":" + str(genomic_start) + "-" + str(genomic_end)
-
-				crisprs.append({"crispr": match_sequence.group(),
-								"grna": match_sequence.group()[:-len(pam_sequence)],
-								"location": genomic_location, "strand": strand})
-
-	crispr_df = pandas.DataFrame(crisprs)
-
-	return crispr_df
-
-
-def get_genomic_crisprs(pam_sequence, pam_window, protospacer_length, chromosome):
-	if "guides_%s_%s.csv" % (chromosome, pam_sequence) not in os.listdir(output_path + "offtargets/"):
-		nucleotide_dict = {"A": "T", "T": "A", "G": "C", "C": "G", "N": "N"}
-
-		# Read fasta file
-		file = input_path + "chromosomes/dna_chromosome_" + chromosome + ".fa"
-		fasta_file = SeqIO.read(file, "fasta")
-
-		# Extract chromosome sequence
-		sequence = str(fasta_file.seq)
-
-		# Reverse sequence for complementary DNA strand
-		reverse_sequence = "".join([nucleotide_dict[n] for n in sequence[::-1]])
-
-		# PAM specific CRISPR location finding across chromosome
-		positive_crispr_df = find_pam_protospacer(
-			sequence=sequence, pam_sequence=pam_sequence,
-			pam_window=[pam_window.split("-")[0], pam_window.split("-")[1]],
-			protospacer_length=protospacer_length, strand="1", chromosome=chromosome)
-
-		negative_crispr_df = find_pam_protospacer(
-			sequence=reverse_sequence, pam_sequence=pam_sequence,
-			pam_window=[pam_window.split("-")[0], pam_window.split("-")[1]],
-			protospacer_length=protospacer_length, strand="-1", chromosome=chromosome)
-
-		df = pandas.concat([positive_crispr_df, negative_crispr_df])
-		df.columns = ["CRISPR_PAM_Sequence", "gRNA_Target_Sequence", "Location", "Strand"]
-		df.to_csv(output_path + "offtargets/guides_%s_%s.csv" % (chromosome, pam_sequence), index=False)
+def mm_combination_seq(mm, seq):
+	"""
+	Mismatched version of gRNAs
+	:param mm:
+	:param seq:
+	:return:
+	"""
+	nuc_dict = {"A": ["T", "C", "G"],
+				"T": ["A", "C", "G"],
+				"C": ["A", "T", "G"],
+				"G": ["A", "T", "C"]}
+	pam = seq[-3:]
+	seq = seq[:-3]
+	if mm == 0: return seq
 	else:
-		df = pandas.read_csv(output_path + "offtargets/guides_%s_%s.csv" % (chromosome, pam_sequence), index_col=0)
+		ind_perm = list(itertools.permutations(list(range(len(seq))), mm))
+		all_seqs = list()
+		for pos in ind_perm:
+			new_seq = []
+			for ind in range(len(seq)):
+				if ind not in pos:
+					new_seq.append(list(seq[ind]))
+				else:
+					new_seq.append(list(nuc_dict[seq[ind]]))
+			all_seqs.append(new_seq)
 
-	return df
+		all_mm_guides = list()
+		for mm_seq in all_seqs:
+			for s in list(itertools.product(*mm_seq)):
+				all_mm_guides.append("".join(s) + pam)
 
-
-# -----------------------------------------------------------------------------------------#
-# Object
-
-class Guide:
-
-	def __init__(self, guide):
-		self.guide = guide
-		self.guide_id = None
-		self.locations = None
-		self.one_mms = None
-		self.two_mms = None
-		self.three_mms = None
-		self.four_mms = None
-
-	def get_id(self, guide_index):
-		self.guide_id = guide_index
-
-	def get_locations(self, loc):
-		if self.locations is None:
-			self.locations = list()
-			self.locations.append(loc)
-
-		else:
-			if loc not in self.locations:
-				self.locations.append(loc)
-
-	def mm_calculations(self, other_guide):
-		# High gap opening and gap extension points to prevent indels
-		# Exact match should equal to 40
-		for alignm in pairwise2.align.globalms(self.guide, other_guide, 2, 0, -5, -5):
-			if alignm[-2] == 0 and alignm[-1] == len(self.guide):
-				score = alignm[2]
-				if score >= 32:
-					mm = (40 - score) / 2
-					if mm == 1:
-						if self.one_mms is None:
-							self.one_mms = list()
-							self.one_mms.append(other_guide)
-						else:
-							if other_guide not in self.one_mms:
-								self.one_mms.append(other_guide)
-					elif mm == 2:
-						if self.two_mms is None:
-							self.two_mms = list()
-							self.two_mms.append(other_guide)
-						else:
-							if other_guide not in self.two_mms:
-								self.two_mms.append(other_guide)
-					elif mm == 3:
-						if self.three_mms is None:
-							self.three_mms = list()
-							self.three_mms.append(other_guide)
-						else:
-							if other_guide not in self.three_mms:
-								self.three_mms.append(other_guide)
-					elif mm == 4:
-						if self.four_mms is None:
-							self.four_mms = list()
-							self.four_mms.append(other_guide)
-						else:
-							if other_guide not in self.four_mms:
-								self.four_mms.append(other_guide)
+		return list(set(all_mm_guides))
 
 
-def serialise_object(genome_guide_df, pam):
-	if pam == "NGG":
-		genome_guide_df = genome_guide_df[genome_guide_df["CRISPR_PAM_Sequence"].str.endswith("GG")]
+def grna_fasta(myc_guides, file, mm):
+	#crisprs = pandas.read_csv("/Volumes/team215/Cansu/BEstimate/Matt/ABE_NGN_AKT1_39_summary_df.csv", index_col=0)["CRISPR_PAM_Sequence"].values[:100]
+	#crisprs = pandas.read_csv(path + file, index_col=0)["CRISPR_PAM_Sequence"].values
+	#crisprs = ["AAACGGGGCCATCTGTCACCAGG", "AAAGACGTTTTTGTGCTGTGGGC", "AAAGTTGCTTTTCAAATTTTTGG", "AAATTTGTTATTGTGTATTATGT","AAAAAAACGCCGTGGTGCAGCGG", "AAAAAACGCCGTGGTGCAGCGGC", "AAAAACCCCCAAAATGCATTTGA", "AAAAAGCTTCTCATGGTCCTGGT"]
+	crisprs = myc_guides
+	mm = int(mm)
+	f = open(ot_path + "fasta/%s.fa" % "_".join(file.split(".")[0].split("_")[:-2]), "w")
+	grna_dict = dict()
+	count = 1
+	for i in crisprs:
+		seq = i[0]
+		direction = i[1]
+		f.write(">gRNA-%d-%s\n%s\n" %(count, direction, seq))
+		if "gRNA-%d-%s" % (count, direction) not in grna_dict.keys():
+			grna_dict["gRNA-%d-%s" %(count, direction)] = {"seq": seq}
+		for k in range(1, mm + 1):
+			mm_count = 1
+			mm_seqs = mm_combination_seq(mm=k, seq=seq)
+			for m_seq in mm_seqs:
+				f.write(">gRNA-%d-%s:mm%d:count%s\n%s\n" % (count, direction, k, mm_count, m_seq))
+				grna_dict["gRNA-%d-%s" % (count, direction)]["mm%d:mm_count%d" % (k, mm_count)] = m_seq
+				mm_count += 1
+		count += 1
+		print(count)
 
-	guide_count = 0
-	x = genome_guide_df.groupby(["gRNA_Target_Sequence"])
-	t = len(x)
-	for guide, guide_df in x:
-		guide_count += 1
-		if "offtargets/genome_%s_%s_object.p" % (pam, guide) not in os.listdir(output_path + "offtargets/guides/"):
-			obj = Guide(guide=guide)
-			obj.get_id(guide_index=guide_count)
-			for group, _ in guide_df.groupby(["Location", "Strand"]):
-				loc = group[0] + "|" + str(group[1])
-				obj.get_locations(loc)
-
-			for other_guide in genome_guide_df.gRNA_Target_Sequence.unique():
-				if other_guide != guide:
-					obj.mm_calculations(other_guide=other_guide)
-			pickle.dump(guide, open(output_path + "offtargets/guides/genome_%s_%s_object.p" % (pam, guide), "wb"))
-		print(guide_count * 100.0 / t)
-
-def deserialise_viability_object(pam):
-	guide_objs = pickle.load(open(output_path + "offtargets/genome_%s_guide_object.p" % pam, "rb"))
-	return guide_objs
+	f.close()
+	pickle.dump(grna_dict, open(ot_path + "fasta_dict/" + "_".join(file.split(".")[0].split("_")[:-2]) + "_dict.p", "wb"))
+	return 1
 
 
-def summary_off_targets(pam):
-	if "off_target_guide_summary_%s.csv" % pam not in os.listdir(output_path + "offtargets/"):
-		guide_objs = deserialise_viability_object(pam)
+def index_genome(genome, vcf):
 
-		guide_df = pandas.DataFrame(columns=["guide_id", "full_match", "1mm", "2mm", "3mm", "4mm"],
-									index=list(guide_objs.keys()))
-		for guide, obj in guide_objs.items():
-			guide_df.loc[guide, "guide_id"] = obj.guide_id
-			guide_df.loc[guide, "full_match"] = len(obj.locations)
-			guide_df.loc[guide, "1mm"] = len(obj.one_mms)
-			guide_df.loc[guide, "2mm"] = len(obj.two_mms)
-			guide_df.loc[guide, "3mm"] = len(obj.three_mms)
-			guide_df.loc[guide, "4mm"] = len(obj.four_mms)
+	return 1
 
-		guide_df.to_csv(output_path + "offtargets/off_target_guide_summary_%s.csv" % pam, index=True)
+def run_mrsfast(fasta, threads_num):
+	"""
+	Example in cluster systems
+	os.system("bsub -G team215-grp -R'select[mem>20000] rusage[mem=20000]' -M20000 -n 8 "
+		  "-o /path/logs/X.o "
+		  "-e /path/logs/X.e "
+		  "mrsfast --search /path/genome/genome_38.fa --seq path/fasta/X.fa --threads 8 -e 0 "
+		  "-o /path/sam_files/X")
+	:return:
+	"""
+	os.system("mrsfast --search genome/genome_38.fa --seq fasta/%s.fa --threads %s -e 0"
+			  "-o sam_files/%s_alignment.sam" % (fasta, threads_num, fasta))
+	return 1
 
+
+def read_sam(sam_file):
+	ot_df = pandas.DataFrame(columns=["guide_flag", "guide_seq", "direction", "mm", "chr", "start", "mm_count"])
+	f = open(ot_path + "sam_files/" + sam_file, "r")
+	lines = f.readlines()
+	n, t = 0, len(lines)
+	ind_count = 0
+	for line in lines:
+		if line[:4] == "gRNA":
+			print(line)
+			l = line.split("\t")
+			if len(l[0].split(":")) == 1:
+				guide_flag = l[0]
+				mm = "0"
+				mm_count = None
+			else:
+				guide_flag = l[0].split(":")[0]
+				mm = l[0].split(":")[1][2:]
+				mm_count = l[0].split(":")[2][5:]
+
+			ot_df.loc[ind_count, "guide_flag"] = guide_flag
+			ot_df.loc[ind_count, "guide_seq"] = l[9]
+			ot_df.loc[ind_count, "direction"] = guide_flag.split("-")[-1]
+			ot_df.loc[ind_count, "mm"] = mm
+			ot_df.loc[ind_count, "chr"] = l[2]
+			ot_df.loc[ind_count, "start"] = l[3]
+			ot_df.loc[ind_count, "mm_count"] = mm_count
+			ind_count += 1
+		print(n * 100.0 /t)
+		n += 1
+	f.close()
+
+	chr_list = [str(i) for i in list(range(1, 23))] + ["X", "Y", "MT"]
+	ot_df2 = ot_df[ot_df.chr.isin(chr_list)]
+
+	summary_ot_df = pandas.DataFrame(columns = ["guide_seq", "direction", "exact", "mm1", "mm2", "mm3", "mm4"],
+									 index = list(ot_df2.groupby(["guide_flag"]).groups.keys()))
+
+	for g, g_df in ot_df2.groupby(["guide_flag"]):
+		exact = g_df.groupby(["mm"]).size().loc["0"]
+		summary_ot_df.loc[g, "guide_seq"] = g_df[g_df.mm == "0"]["guide_seq"].unique()[0]
+		summary_ot_df.loc[g, "exact"] = exact
+		for i in range(1, 5):
+			if str(i) in g_df.mm.unique():
+				summary_ot_df.loc[g, "mm%d" % i] = g_df.groupby(["mm"]).size().loc[str(i)]
+			else:
+				summary_ot_df.loc[g, "mm%d" % i] = 0
+
+	summary_ot_df = summary_ot_df.reset_index()
+	summary_ot_df.columns = ["guide_flag", "CRISPR_PAM_Sequence", "exact", "mm1", "mm2", "mm3", "mm4"]
+
+
+	summary_ot_df2 = pandas.DataFrame(columns = ["guide_seq", "exact", "mm1", "mm2", "mm3", "mm4"],
+									  index = list(ot_df.groupby(["guide_flag"]).groups.keys()))
+
+	for g, g_df in ot_df.groupby(["guide_flag"]):
+		exact = g_df.groupby(["mm"]).size().loc["0"]
+		summary_ot_df2.loc[g, "guide_seq"] = g_df[g_df.mm == "0"]["guide_seq"].unique()[0]
+		summary_ot_df2.loc[g, "exact"] = exact
+		for i in range(1, 5):
+			if str(i) in g_df.mm.unique():
+				summary_ot_df2.loc[g, "mm%d" % i] = g_df.groupby(["mm"]).size().loc[str(i)]
+			else:
+				summary_ot_df2.loc[g, "mm%d" % i] = 0
+
+	summary_ot_df2 = summary_ot_df2.reset_index()
+	summary_ot_df2.columns = ["guide_flag", "CRISPR_PAM_Sequence", "exact", "mm1", "mm2", "mm3", "mm4"]
+
+	crisprs = pandas.read_csv("/Volumes/team215/Cansu/BEstimate/Matt/ABE_NGN_AKT1_39_summary_df.csv", index_col=0)
+
+	crisprs2 = pandas.merge(crisprs, summary_ot_df, how="inner", on=["CRISPR_PAM_Sequence"])
+
+
+
+def read_unread(file):
+
+	not_aligned = open(ot_path + "sam_files/AKT1_ABE_alignment.nohit", "r")
+na_lines = not_aligned.readlines()
+na_df = pandas.DataFrame(columns = ["guide_flag", "sequence"])
+count = 0
+for line in na_lines:
+	if line[0] == ">":
+		na_df.loc[count, "guide_flag"] = line.strip()[0]
 	else:
-		guide_df = pandas.read_csv(output_path + "offtargets/off_target_guide_summary_%s.csv" % pam, index_col=0)
-
-	return guide_df
-
-
-###########################################################################################
-# Execution
+		na_df.loc[count, "sequence"] = line.strip()[0]
+	count += 1
 
 
-def main():
-	if "genome_wide_%s.csv" % args["PAMSEQ"] not in os.listdir(output_path + "offtargets/"):
-		all_dfs = list()
-		for chromosome in [str(x) for x in list(range(1, 23))] + ["X", "Y"]:
-			df = get_genomic_crisprs(pam_sequence=args["PAMSEQ"], pam_window=args["PAMWINDOW"],
-									 protospacer_length=args["PROTOLEN"], chromosome=chromosome)
-			all_dfs.append(df)
-		genome_guides = pandas.concat(all_dfs)
-		genome_guides.to_csv(output_path + "offtargets/genome_wide_%s.csv" % args["PAMSEQ"], index=True)
+
+
+# Benchmarking MYC gene with ENSE00003746860
+
+
+def check_NGG(grna):
+	if grna[-2:] == "GG":
+		return True
 	else:
-		print("Reading Guide File")
-		genome_guides = pandas.read_csv(output_path + "offtargets/genome_wide_%s.csv" % args["PAMSEQ"], index_col=0)
-		genome_guides.astype({col: int for col in desired_columns_to_convert})
+		return False
 
-	if "genome_%s_guide_object.p" % args["PAMSEQ"] not in os.listdir(output_path + "offtargets/"):
-		serialise_object(genome_guide_df=genome_guides, pam=args["PAMSEQ"])
+all_myc = pandas.read_csv("/Volumes/team215/Cansu/BEstimate/off_targets/benchmarking/NGN_CBE_MYC_crispr_df.csv", index_col=0)
+exon_myc = all_myc[all_myc.Exon_ID == "ENSE00003746860"]
+exon_myc["NGG"] = exon_myc.apply(lambda x: check_NGG(x.CRISPR_PAM_Sequence), axis=1)
+ngg_exon_myc = exon_myc[exon_myc.NGG]
+myc_guides = list(ngg_exon_myc[["CRISPR_PAM_Sequence", "Direction"]].values)
+summary_ot_df2
 
-	summary_guide_df = summary_off_targets(pam=args["PAMSEQ"])
+cf_myc = pandas.read_csv("/Volumes/team215/Cansu/BEstimate/off_targets/benchmarking/WGE-ENSE00003746860-crisprs.tsv", sep="\t")
+cf_myc = cf_myc[["seq", "location", "strand", "off_target_summary"]]
+cf_myc["exact"] = cf_myc.apply(lambda x: x.off_target_summary.split(", ")[0].split(":")[1], axis=1)
+cf_myc["mm1"] = cf_myc.apply(lambda x: x.off_target_summary.split(", ")[1].split(":")[1], axis=1)
+cf_myc["mm2"] = cf_myc.apply(lambda x: x.off_target_summary.split(", ")[2].split(":")[1], axis=1)
+cf_myc["mm3"] = cf_myc.apply(lambda x: x.off_target_summary.split(", ")[3].split(":")[1], axis=1)
+cf_myc["mm4"] = cf_myc.apply(lambda x: x.off_target_summary.split(", ")[4].split(":")[1], axis=1)
 
-	return True
 
-main()
+
+
+
+
+
+
+
+
+
+
+
+
+

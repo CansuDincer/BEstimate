@@ -86,17 +86,6 @@ def take_input():
 	parser.add_argument("-edit_to", dest="EDIT_TO", choices=["A", "T", "G", "C"],
 						help="The nucleotide after edition.")
 
-	# OFF TARGETS
-
-	parser.add_argument("-offtarget", dest="OFFTARGET",
-						help="The beeloan option if the user wants to add off-target information.")
-
-	parser.add_argument("-vcf_offtarget", dest="VCF",
-						help="the VCF file of the cancer model to change the genome for off-target.")
-
-	parser.add_argument("-mm", dest="MM", default=4,
-						help="The number of mismatches allowed for off targets")
-
 	# OUTPUT
 
 	parser.add_argument("-o", dest="OUTPUT_PATH", default=os.getcwd() + "/",
@@ -120,9 +109,6 @@ if args["OUTPUT_PATH"][-1] == "/":
 	path = args["OUTPUT_PATH"]
 else:
 	path = args["OUTPUT_PATH"] + "/"
-
-os.system("mkdir %s/off_targets/" % path)
-ot_path = path + "/off_targets"
 
 # -----------------------------------------------------------------------------------------#
 # Objects from APIs
@@ -490,7 +476,28 @@ class Ensembl:
 											old_val.append(
 												{"start": output["start"], "end": output["end"]})
 											info_dict[output["id"]] = old_val
+					"""
+					if output["feature_type"] == "transcript" and output["Parent"] == self.gene_id:
+						if "is_canonical" in output.keys():
+							if output["is_canonical"] == 1:
+								if output["id"].split(".")[0] not in canonicals:
+									canonicals.append(output["id"].split(".")[0])
+						if "source" in output.keys():
+							if output["source"] == "ensembl_havana":
+								if output["id"].split(".")[0] not in canonicals:
+									canonicals.append(output["id"].split(".")[0])
+						if output["id"].split(".")[0] in canonicals:
+							if output["id"] not in info_dict.keys():
+								info_dict[output["id"]] = \
+									[{"start": output["start"], "end": output["end"]}]
 
+							else:
+								old_val = info_dict[output["id"]]
+								if {"start": output["start"], "end": output["end"]} not in old_val:
+									old_val.append(
+										{"start": output["start"], "end": output["end"]})
+									info_dict[output["id"]] = old_val
+					"""
 				else:
 					# Selected transcript
 					if output["feature_type"] == "transcript" and output["Parent"] == self.gene_id:
@@ -1906,6 +1913,7 @@ def annotate_edits(ensembl_object, vep_df):
 	seq_mapping = ensembl_object.extract_uniprot_info(ensembl_pid=ensembl_p, uniprot=uniprot)
 	if seq_mapping:
 		uniprot = uniprot.split(".")[0].split("-")[0]
+		print(uniprot)
 		smap = seq_mapping[uniprot]
 		obj = Uniprot(uniprotid=uniprot)
 		obj.extract_uniprot()
@@ -2075,11 +2083,12 @@ def annotate_interface(annotated_edit_df):
 	df["disrupted_Eclair_int_genes"] = None
 	for group, group_df in df.groupby(["swissprot", "Protein_Position"]):
 		if group[1] is not None and group[1] != "None" and pandas.isna(group[1]) == False:
-			if group[0] in list(yulab.P1) or group[0] in list(yulab.P2):
+			swissprot = group[0].split(".")[0]
+			if swissprot in list(yulab.P1) or swissprot in list(yulab.P2):
 				all_pdb_partners, all_i3d_partners, all_eclair_partners = list(), list(), list()
 				if len(group[1].split(";")) == 1:
 					pdb_partners, i3d_partners, eclair_partners = disrupt_interface(
-						uniprot=group[0], pos=int(group[1]))
+						uniprot=swissprot, pos=int(group[1]))
 					if pdb_partners is not None:
 						all_pdb_partners.append(pdb_partners)
 					if i3d_partners is not None:
@@ -2089,7 +2098,7 @@ def annotate_interface(annotated_edit_df):
 				else:
 					for pos in group[1].split(";"):
 						pdb_partners, i3d_partners, eclair_partners = disrupt_interface(
-							uniprot=group[0], pos=int(pos))
+							uniprot=swissprot, pos=int(pos))
 						if pdb_partners is not None:
 							all_pdb_partners.append(pdb_partners)
 						if i3d_partners is not None:
@@ -2399,74 +2408,6 @@ def summarise_guides(last_df):
 	return summary_df
 
 
-def mm_combination_seq(mm, seq):
-	"""
-	Mismatched version of gRNAs
-	:param mm:
-	:param seq:
-	:return:
-	"""
-	nuc_dict = {"A": ["T", "C", "G"],
-				"T": ["A", "C", "G"],
-				"C": ["A", "T", "G"],
-				"G": ["A", "T", "C"]}
-	pam = seq[-3:]
-	seq = seq[:-3]
-	if mm == 0: return seq
-	else:
-		ind_perm = list(itertools.permutations(list(range(len(seq))), mm))
-		all_seqs = list()
-		for pos in ind_perm:
-			new_seq = []
-			for ind in range(len(seq)):
-				if ind not in pos:
-					new_seq.append(list(seq[ind]))
-				else:
-					new_seq.append(list(nuc_dict[seq[ind]]))
-			all_seqs.append(new_seq)
-
-		all_mm_guides = list()
-		for mm_seq in all_seqs:
-			for s in list(itertools.product(*mm_seq)):
-				all_mm_guides.append("".join(s) + pam)
-
-		return list(set(all_mm_guides))
-
-
-def grna_fasta(df, mm):
-
-	crisprs = df["CRISPR_PAM_Sequence"].values
-
-	f = open(ot_path + "fasta/%s.fa" % args["OUTPUT_FILE"], "w")
-	grna_dict = dict()
-	count = 1
-	for i in crisprs:
-		f.write(">gRNA-%d\n%s\n" %(count, i))
-		if "gRNA-%sd" % count not in grna_dict.keys():
-			grna_dict["gRNA-%d" %count] = {"seq": i}
-		for k in range(1, mm + 1):
-			mm_count = 1
-			mm_seqs = mm_combination_seq(mm=k, seq=i)
-			for seq in mm_seqs:
-				f.write(">gRNA-%d:mm%d:count%s\n%s\n" % (count, k, mm_count, seq))
-				grna_dict["gRNA-%d" % count]["mm%d:mm_count%d" % (k, mm_count)] = seq
-				mm_count += 1
-		count += 1
-
-	f.close()
-	pickle.dump(grna_dict, open(ot_path + "fasta_dict/" + args["OUTPUT_FILE"] + "_dict.p", "wb"))
-	return 1
-
-
-def get_offtargets(ot_model):
-
-	if ot_model is False:
-
-		os.system("mrsfast --search genome.fa "
-				  "--seq %AKT1_100.fa -e 1 -o mappings.sam" % ot_path)
-
-
-
 ###########################################################################################
 # Execution
 
@@ -2679,3 +2620,4 @@ print("""\n
            The BEstimate analysis finished!
 ------------------------------------------------------
 \n""")
+
