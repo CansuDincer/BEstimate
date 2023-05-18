@@ -2083,12 +2083,11 @@ def annotate_interface(annotated_edit_df):
 	df["disrupted_Eclair_int_genes"] = None
 	for group, group_df in df.groupby(["swissprot", "Protein_Position"]):
 		if group[1] is not None and group[1] != "None" and pandas.isna(group[1]) == False:
-			swissprot = group[0].split(".")[0]
-			if swissprot in list(yulab.P1) or swissprot in list(yulab.P2):
+			if group[0] in list(yulab.P1) or group[0] in list(yulab.P2):
 				all_pdb_partners, all_i3d_partners, all_eclair_partners = list(), list(), list()
 				if len(group[1].split(";")) == 1:
 					pdb_partners, i3d_partners, eclair_partners = disrupt_interface(
-						uniprot=swissprot, pos=int(group[1]))
+						uniprot=group[0], pos=int(group[1]))
 					if pdb_partners is not None:
 						all_pdb_partners.append(pdb_partners)
 					if i3d_partners is not None:
@@ -2098,7 +2097,7 @@ def annotate_interface(annotated_edit_df):
 				else:
 					for pos in group[1].split(";"):
 						pdb_partners, i3d_partners, eclair_partners = disrupt_interface(
-							uniprot=swissprot, pos=int(pos))
+							uniprot=group[0], pos=int(pos))
 						if pdb_partners is not None:
 							all_pdb_partners.append(pdb_partners)
 						if i3d_partners is not None:
