@@ -8,7 +8,7 @@
 # -----------------------------------------------------------------------------------------#
 
 # Import necessary packages
-import os, sys, pandas, re, argparse, requests, json
+import os, sys, pandas, re, argparse, requests, json, itertools, pickle
 from Bio import SeqIO
 from Bio import pairwise2
 from Bio.pairwise2 import format_alignment
@@ -58,9 +58,7 @@ def take_input():
 
 	# VEP and PROTEIN LEVEL ANALYSIS
 	parser.add_argument("-vep", dest="VEP", action="store_true",
-						help="The boolean option if user wants to analyse the edits through VEP.")
-	parser.add_argument("-P", dest="PROTEIN", action="store_true",
-						help="The boolean option if user wants to analyse the edits.")
+						help="The boolean option if user wants to analyse the edits through VEP and Uniprot.")
 
 	# MUTATION INFORMATION
 	parser.add_argument("-mutation", dest="MUTATION", default=None,
@@ -94,6 +92,14 @@ def take_input():
 	parser.add_argument("-ofile", dest="OUTPUT_FILE", default="output",
 						help="The output file name, if not specified \"position\" will be used!")
 
+	# OFF TARGETS
+	parser.add_argument("-ot", dest="OFF_TARGET", action="store_true",
+						help="Whether off targets will be computed or not")
+	parser.add_argument("-mm", dest="MISMATCH", default=4,
+						help="(If -ot provided) number of maximum mismatches allowed in off targets")
+	parser.add_argument("-genome", dest="GENOME", default="Homo_sapiens_GRCh38_dna_sm_all_chromosomes",
+						help="(If -ot provided) name of the genome file")
+
 	parsed_input = parser.parse_args()
 	input_dict = vars(parsed_input)
 
@@ -109,6 +115,9 @@ if args["OUTPUT_PATH"][-1] == "/":
 	path = args["OUTPUT_PATH"]
 else:
 	path = args["OUTPUT_PATH"] + "/"
+
+ot_path = os.getcwd() + "/../offtargets"
+mrsfast_path = os.getcwd() + "/../bin/mrsfast"
 
 # -----------------------------------------------------------------------------------------#
 # Objects from APIs
@@ -278,6 +287,7 @@ class Ensembl:
 				seq_ensembl = self.server + "/sequence/id/%s?" % x["id"]
 				seq_request = requests.get(seq_ensembl,
 										   headers={"Content-Type": "text/x-fasta"})
+				print(seq_request.text.split("\n")[0])
 				chr = seq_request.text.split("\n")[0].split(":")[2].strip()
 				try:
 					if chr != "X" and chr != "Y":
@@ -299,7 +309,7 @@ class Ensembl:
 		seq_ensembl = self.server + "/sequence/id/%s?" % gene_id
 		seq_flan_ensembl = self.server + "/sequence/id/%s?expand_3prime=23;expand_5prime=23" % gene_id
 
-		print("Request to Ensembl REST API for sequence information:")
+		print("Request to Ensembl REST API for sequence information")
 		seq_request = requests.get(seq_ensembl,
 								   headers={"Content-Type": "text/x-fasta"})
 		seq_flan_request = requests.get(seq_flan_ensembl,
@@ -412,7 +422,8 @@ class Ensembl:
 									[nucleotide_dict[n] for n in self.left_sequence_analysis[::-1]])
 								self.flan_right_sequence_analysis = "".join(
 									[nucleotide_dict[n] for n in self.flan_left_sequence_analysis[::-1]])
-
+		if self.sequence is not None:
+			print("Sequence was retrieved.")
 	def extract_gRNA_flan_sequence(self, location, direction, fivep, threep):
 		"""
 		Annotating flanking regions of the gRNAs
@@ -476,8 +487,8 @@ class Ensembl:
 											old_val.append(
 												{"start": output["start"], "end": output["end"]})
 											info_dict[output["id"]] = old_val
-					"""
-					if output["feature_type"] == "transcript" and output["Parent"] == self.gene_id:
+
+					elif output["feature_type"] == "transcript" and output["Parent"] == self.gene_id:
 						if "is_canonical" in output.keys():
 							if output["is_canonical"] == 1:
 								if output["id"].split(".")[0] not in canonicals:
@@ -497,7 +508,7 @@ class Ensembl:
 									old_val.append(
 										{"start": output["start"], "end": output["end"]})
 									info_dict[output["id"]] = old_val
-					"""
+
 				else:
 					# Selected transcript
 					if output["feature_type"] == "transcript" and output["Parent"] == self.gene_id:
@@ -537,7 +548,6 @@ class Ensembl:
 
 			protein_ids = list()
 			swiss_protein_ids = list()
-			selected_protein_ids = list()
 			selected_transcript = list()
 			for ids in info_dict.keys():
 				for d in info_dict[ids]:
@@ -586,7 +596,7 @@ class Ensembl:
 
 		range_locations = list(range(start, end))
 		transcripts_exons = dict()
-		if self.info_dict != {}:
+		if self.info_dict != {} and self.info_dict is not None:
 			for transcript, transcript_dict_list in self.info_dict.items():
 				for transcript_dict in transcript_dict_list:
 					in_transcript = False
@@ -617,7 +627,7 @@ class Ensembl:
 	def check_cds(self, transcript_id, start, end):
 		range_locations = list(range(start, end))
 		in_cds = False
-		if self.info_dict != {}:
+		if self.info_dict != {} and self.info_dict is not None:
 			if transcript_id in self.info_dict.keys():
 				for transcript_dict in self.info_dict[transcript_id]:
 					if "cds" in transcript_dict.keys():
@@ -1062,7 +1072,6 @@ class Variant:
 # Data w/out API opportunity
 
 yulab = pandas.read_table(os.getcwd() + "/../data/H_sapiens_interfaces.txt")
-cosmic_freq = pandas.read_csv(os.getcwd() + "/../data/all_frequency_df.csv", index_col=0)
 
 
 # -----------------------------------------------------------------------------------------#
@@ -1327,7 +1336,7 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window,
 
 	activity_window = [activity_window[0] - 1, activity_window[1]]
 
-	print("Edit df is filling...")
+	print("Edit Data Frame is filling...")
 	edit_df = pandas.DataFrame(columns=["Hugo_Symbol", "CRISPR_PAM_Sequence", "gRNA_Target_Sequence", "Location",
 										"Edit_Location", "Direction", "Strand", "Gene_ID", "Transcript_ID", "Exon_ID",
 										"guide_in_CDS", "gRNA_flanking_sequences", "Edit_in_Exon", "Edit_in_CDS",
@@ -1791,7 +1800,7 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 	for c in vep_columns:
 		hgvs_df[c] = None
 
-	print("VEP API retrival..")
+	print("VEP Data Frame is filling with VEP API.")
 	# Decide the server
 	server = "http://grch37.rest.ensembl.org" if ensembl_object.assembly == "hg19" \
 		else "https://rest.ensembl.org"
@@ -1811,12 +1820,12 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 	r = count - (200 * t)
 	hgvs_obj = dict()
 	for i in range(t):
-		print("i as %d" %i)
 		x = 200 * i
 		hgvs_list = list(hgvs_index.loc[x: x+199]["HGVS"].values)
 		hgvs_json = json.dumps(hgvs_list)
 		vep_request = requests.post(server + ext, headers=headers,params=params,
 									data='{ "hgvs_notations" : %s }' % hgvs_json)
+		print(vep_request.ok)
 		if not vep_request.ok:
 			print("No response from VEP %d - %d" %(x, x+199))
 
@@ -1889,9 +1898,11 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 
 	vep_df = hgvs_df.copy()
 	vep_df = vep_df.drop_duplicates()
+
+	"""
 	vep_df["cosmic_freq"] = vep_df.apply(
 		lambda x: cosmic_freq.loc[x.cosmic_id]["frequency"] if x.cosmic_id is not None and x.cosmic_id in cosmic_freq.index else None, axis=1)
-
+	"""
 	return vep_df
 
 
@@ -1913,7 +1924,7 @@ def annotate_edits(ensembl_object, vep_df):
 	seq_mapping = ensembl_object.extract_uniprot_info(ensembl_pid=ensembl_p, uniprot=uniprot)
 	if seq_mapping:
 		uniprot = uniprot.split(".")[0].split("-")[0]
-		print(uniprot)
+		print("Uniprot ID: %s" % uniprot)
 		smap = seq_mapping[uniprot]
 		obj = Uniprot(uniprotid=uniprot)
 		obj.extract_uniprot()
@@ -2278,12 +2289,13 @@ def summarise_guides(last_df):
 				   "is_stop", "is_synonymous", "proline_addition", "variant_classification",
 				   "consequence_terms", "most_severe_consequence", "variant_biotype", "Regulatory_ID",
 				   "Motif_ID", "TFs_on_motif", "polyphen_prediction", "sift_prediction", "impact",
-				   "is_clinical", "clinical_id", "clinical_significance", "cosmic_id", "clinvar_id", "cosmic_freq",
+				   "is_clinical", "clinical_id", "clinical_significance", "cosmic_id", "clinvar_id",
 				   "ancestral_populations", "swissprot", "Domain", "curated_Domain", "PTM",
 				   "is_disruptive_interface_EXP", "disrupted_PDB_int_partners",
 				   "disrupted_PDB_int_genes", "is_disruptive_interface_MOD", "disrupted_I3D_int_partners",
 				   "disrupted_I3D_int_genes", "is_disruptive_interface_PRED", "disrupted_Eclair_int_partners",
 				   "disrupted_Eclair_int_genes"])
+					# cosmic_freq
 
 	i = 0
 	for guide, guide_df in last_df.groupby(["CRISPR_PAM_Sequence"]):
@@ -2345,12 +2357,12 @@ def summarise_guides(last_df):
 			summary_df.loc[i, "polyphen_prediction"] = ";".join([str(x) for x in list(guide_df.polyphen_prediction.unique()) if x is not None and type(x) != float])
 		else:
 			summary_df.loc[i, "polyphen_prediction"] = None
-		summary_df.loc[i, "sift_prediction"] = ";".join([x for x in list(guide_df.sift_prediction.unique()) if x is not None and type(x) != float])
-		summary_df.loc[i, "impact"] = ";".join([x for x in list(guide_df.impact.unique()) if x is not None and type(x) != float])
+		summary_df.loc[i, "sift_prediction"] = ";".join([x for x in list(guide_df.sift_prediction.unique()) if x is not None and pandas.isna(x) == False and type(x) != float])
+		summary_df.loc[i, "impact"] = ";".join([x for x in list(guide_df.impact.unique()) if x is not None and pandas.isna(x) == False and type(x) != float])
 		summary_df.loc[i, "is_clinical"] = True if True in guide_df.is_clinical.unique() else False
 		if guide_df[~pandas.isna(guide_df.clinical_id)].clinical_id.unique() is not None and type(guide_df.clinical_id) != float and \
 				list(guide_df[~pandas.isna(guide_df.clinical_id)].clinical_id.unique()):
-			summary_df.loc[i, "clinical_id"] = ";".join([x for x in list(guide_df.clinical_id.unique()) if x is not None and type(x) != float])
+			summary_df.loc[i, "clinical_id"] = ";".join([x for x in list(guide_df.clinical_id.unique()) if x is not None and pandas.isna(x) == False and type(x) != float])
 		else:
 			summary_df.loc[i, "clinical_id"] = None
 		if guide_df[~pandas.isna(guide_df.clinical_significance)].clinical_significance.unique() is not None and type(guide_df.clinical_significance) != float and \
@@ -2368,11 +2380,13 @@ def summarise_guides(last_df):
 			summary_df.loc[i, "clinvar_id"] = ";".join([str(x) for x in list(guide_df.clinvar_id.unique()) if x is not None and type(x) != float])
 		else:
 			summary_df.loc[i, "clinvar_id"] = None
+		"""
 		if guide_df[~pandas.isna(guide_df.cosmic_freq)].cosmic_freq.unique() is not None and type(guide_df.cosmic_freq) != float and \
 				list(guide_df[~pandas.isna(guide_df.cosmic_freq)].cosmic_freq.unique()):
 			summary_df.loc[i, "cosmic_freq"] = ";".join([str(x) for x in list(guide_df.cosmic_freq.unique()) if x is not None and type(x) != float])
 		else:
 			summary_df.loc[i, "cosmic_freq"] = None
+		"""
 		if guide_df[~pandas.isna(guide_df.ancestral_populations)].ancestral_populations.unique() is not None and type(guide_df.ancestral_populations) != float and \
 				list(guide_df[~pandas.isna(guide_df.ancestral_populations)].ancestral_populations.unique()):
 			summary_df.loc[i, "ancestral_populations"] = ";".join([x for x in list(guide_df.ancestral_populations.unique()) if x is not None and type(x) != float])
@@ -2407,6 +2421,197 @@ def summarise_guides(last_df):
 	return summary_df
 
 
+def mm_combination_seq(mm, seq):
+	"""
+	Mismatched version of gRNAs
+	:param mm: The max number of mismatches wanted
+	:param seq: gRNA sequencd
+	:return: list of potentially mutated sequences of the related gRNA
+	"""
+	nuc_dict = {"A": ["T", "C", "G"],
+				"T": ["A", "C", "G"],
+				"C": ["A", "T", "G"],
+				"G": ["A", "T", "C"]}
+	pam = seq[-3:]
+	seq = seq[:-3]
+	if mm == 0: return seq
+	else:
+		ind_perm = list(itertools.permutations(list(range(len(seq))), mm))
+		all_seqs = list()
+		for pos in ind_perm:
+			new_seq = []
+			for ind in range(len(seq)):
+				if ind not in pos:
+					new_seq.append(list(seq[ind]))
+				else:
+					new_seq.append(list(nuc_dict[seq[ind]]))
+			all_seqs.append(new_seq)
+
+		all_mm_guides = list()
+		for mm_seq in all_seqs:
+			for s in list(itertools.product(*mm_seq)):
+				all_mm_guides.append("".join(s) + pam)
+
+		return list(set(all_mm_guides))
+
+
+def grna_fasta(crisprs, output_name, mm):
+	"""
+	Create fats file
+	:param crisprs: the list of gRNAs
+	:param output_name: the result file
+	:param mm: The max number of mismatches wanted
+	:return:
+	"""
+	global ot_path
+
+	if "%s_dict.p" % output_name not in os.listdir(ot_path + "/fasta_dict/"):
+		mm = int(mm)
+		f = open(ot_path + "/fasta/%s_fasta.fa" % output_name, "w")
+		grna_dict = dict()
+		count = 1
+		for i in crisprs:
+			seq = i[0]
+			direction = i[1]
+			f.write(">gRNA-%d-%s\n%s\n" %(count, direction, seq))
+			if "gRNA-%d-%s" % (count, direction) not in grna_dict.keys():
+				grna_dict["gRNA-%d-%s" %(count, direction)] = {"seq": seq}
+			for k in range(1, mm + 1):
+				mm_count = 1
+				mm_seqs = mm_combination_seq(mm=k, seq=seq)
+				for m_seq in mm_seqs:
+					if len(m_seq) < 10:
+						print(m_seq)
+					f.write(">gRNA-%d-%s:mm%d:count%s\n%s\n" % (count, direction, k, mm_count, m_seq))
+					grna_dict["gRNA-%d-%s" % (count, direction)]["mm%d:mm_count%d" % (k, mm_count)] = m_seq
+					mm_count += 1
+			count += 1
+
+		f.close()
+		pickle.dump(grna_dict, open(ot_path + "/fasta_dict/%s_dict.p" % output_name, "wb"))
+
+	else:
+		grna_dict = pickle.load(open(ot_path + "/fasta_dict/%s_dict.p" % output_name, "rb"))
+	return grna_dict
+
+
+def run_offtargets(genome, crisprs, output_name, mm, ot_vcf, threads_num):
+	"""
+	Run mrsfast from python with gRNAs created with BEstimate
+	:param genome: fasta file of the genome
+	:param crisprs: List of gRNA sequence with their directionality
+	:param output_name: Name of the output file initial
+	:param mm: Number of max mismatch allowed
+	:param mm: Number of max mismatch allowed
+	:return:
+	"""
+	global ot_path, mrsfast_path
+	if "%s_alignment.sam" % output_name not in os.listdir(ot_path + "/sam_files/"):
+		# Create fasta file
+		print("Writing Fasta file..")
+		if "%s_fasta.fa" % output_name not in os.listdir(ot_path + "/fasta/"):
+			grna_fasta(crisprs=crisprs, output_name=output_name, mm=mm)
+			print("Fasta file created.")
+
+		if ot_vcf is False:
+			print("Indexing the genome..")
+			os.system("mrsfast --index %s/genome/%s.fa" % (ot_path, genome))
+			print("\ngRNA alignment on the genome..\n")
+			os.system("mrsfast --search %s/genome/%s.fa --seq %s/fasta/%s_fasta.fa --threads %s -e 0 -o %s/sam_files/%s_alignment.sam"
+					  % (ot_path, genome, ot_path, output_name, threads_num, ot_path, output_name))
+			print("\ngRNA alignment on the genome was finished.\n")
+	if "%s_alignment.sam" % output_name in os.listdir(ot_path + "/sam_files/"):
+		return True
+	else:
+		print("No alignment - off target")
+		return False
+
+
+def read_sam(output_name, crisprs, mm):
+	"""
+	Reading the output of msrfast algorithm
+	:param output_name: Name of the output file initial
+	:param crisprs: List of gRNA sequence with their directionality
+	:param mm: Number of max mismatch allowed
+	:return:
+	"""
+	if "%s_ots.csv" % output_name not in os.listdir(ot_path + "/ot_files/"):
+		ot_df = pandas.DataFrame(columns=["guide_flag", "guide_seq", "direction", "mm", "chr", "start", "mm_count"])
+		grna_dict = grna_fasta(crisprs, output_name, mm)
+		f = open(ot_path + "/sam_files/" + output_name + "_alignment.sam", "r")
+		lines = f.readlines()
+		ind_count = 0
+		for line in lines:
+			if line[:4] == "gRNA":
+				l = line.split("\t")
+				if len(l[0].split(":")) == 1:
+					guide_flag = l[0]
+					mm = "0"
+					mm_count = None
+				else:
+					guide_flag = l[0].split(":")[0]
+					mm = l[0].split(":")[1][2:]
+					mm_count = l[0].split(":")[2][5:]
+				ot_df.loc[ind_count, "guide_flag"] = guide_flag
+				ot_df.loc[ind_count, "guide_seq"] = l[9]
+				ot_df.loc[ind_count, "direction"] = guide_flag.split("-")[-1]
+				ot_df.loc[ind_count, "mm"] = mm
+				ot_df.loc[ind_count, "chr"] = l[2]
+				ot_df.loc[ind_count, "start"] = l[3]
+				ot_df.loc[ind_count, "mm_count"] = mm_count
+				ind_count += 1
+
+		f.close()
+		summary_ot_df = pandas.DataFrame(columns = ["CRISPR_PAM_Sequence", "exact", "mm1", "mm2", "mm3", "mm4"],
+										 index = list(ot_df.groupby(["guide_flag"]).groups.keys()))
+
+		for g, g_df in ot_df.groupby(["guide_flag"]):
+			exact = g_df.groupby(["mm"]).size().loc["0"]
+			# Alignment sequence might be different strand but we want the sequence with PAM
+			# Retrieve sequence of the actual gRNA
+			grna_seq = grna_dict[g_df[g_df.mm == "0"]["guide_flag"].unique()[0]]["seq"]
+			summary_ot_df.loc[g, "CRISPR_PAM_Sequence"] = grna_seq
+			summary_ot_df.loc[g, "exact"] = exact
+			for i in range(1, 5):
+				if str(i) in g_df.mm.unique():
+					summary_ot_df.loc[g, "mm%d" % i] = g_df.groupby(["mm"]).size().loc[str(i)]
+				else:
+					summary_ot_df.loc[g, "mm%d" % i] = 0
+
+		summary_ot_df = summary_ot_df.reset_index()
+		summary_ot_df.columns = ["guide_flag", "CRISPR_PAM_Sequence", "exact", "mm1", "mm2", "mm3", "mm4"]
+
+		summary_ot_df.to_csv(ot_path + "/ot_files/%s_ots.csv" % output_name)
+	else:
+		summary_ot_df = pandas.read_csv(ot_path + "/ot_files/%s_ots.csv" % output_name)
+
+	return summary_ot_df
+
+
+def add_offtargets(genome, output_name, df, mm, threads_num):
+	"""
+	Adding off targets information on BEstimate results
+	:param genome: fasta file of the genome
+	:param output_name: Name of the output file initial
+	:param df: BEstimate final data frame
+	:param mm: Number of max mismatch allowed
+	:param threads_num: Number of threads will be used for alignment
+	:return:
+	"""
+	global ot_path
+	crisprs = df[:10][["CRISPR_PAM_Sequence", "Direction"]].values
+	ot = run_offtargets(genome=genome, crisprs=crisprs, output_name=output_name, mm=mm, ot_vcf=False, threads_num=threads_num)
+	if ot:
+		ot_df = read_sam(output_name= output_name, crisprs=crisprs, mm=mm)
+		if len(ot_df.index) > 0:
+			df_final = pandas.merge(df[:10], ot_df, how="outer", on=["CRISPR_PAM_Sequence"])
+			return df_final
+		else:
+			return False
+	else: return False
+
+
+
 ###########################################################################################
 # Execution
 
@@ -2417,16 +2622,23 @@ def main():
 	:return:
 	"""
 	print("""
-------------------------------------------------------                                                                                         
-                B E s t i m a t e                                      
+--------------------------------------------------------------                                                                                         
+		   B E s t i m a t e                                      
 
-            Wellcome Sanger Institute                                  
-------------------------------------------------------
+	       Wellcome Sanger Institute          
+	                          
+--------------------------------------------------------------
     """)
-	if args["PROTEIN"]:
-		protein = True
+	if args["VEP"]:
+		vep = True
 	else:
-		protein = False
+		vep = False
+
+	if args["OFF_TARGET"]:
+		ot_analysis = True
+		mm = int(args["MISMATCH"])
+	else:
+		ot_analysis = False
 
 	if args["MUTATION"]:
 		mutations = [args["MUTATION"]]
@@ -2441,14 +2653,15 @@ def main():
 
 	print("""
 The given arguments are:\nGene: %s\nAssembl: %s\nEnsembl transcript ID: %s\nPAM sequence: %s\nPAM window: %s
-Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleotide: %s\nVEP and Uniprot analysis: %s\nMutation on genome: %s """
+Protospacer length: %s\nActivity window: %s\nNucleotide change: %s>%s\nVEP and Uniprot analysis: %s\nMutation on genome: %s
+Off target analysis: %s"""
 		  % (args["GENE"], args["ASSEMBLY"], args["TRANSCRIPT"], args["PAMSEQ"], args["PAMWINDOW"], args["PROTOLEN"],
-			 args["ACTWINDOW"], args["EDIT"], args["EDIT_TO"], protein, ", ".join("" if mutations is None else mutations)))
+			 args["ACTWINDOW"], args["EDIT"], args["EDIT_TO"], vep, ", ".join("" if mutations is None else mutations), ot_analysis))
 
 	print("""\n
------------------------------------------------------- 
-              Ensembl Gene Information
------------------------------------------------------- 
+-------------------------------------------------------------- 
+		Ensembl Gene Information
+-------------------------------------------------------------- 
     \n""")
 
 	ensembl_obj = Ensembl(hugo_symbol=args["GENE"], assembly=args["ASSEMBLY"])
@@ -2471,15 +2684,17 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 								 loc_end=ensembl_obj.gene_range[0])
 
 	print("""\n
-------------------------------------------------------
-                gRNAs - Targetable Sites
-------------------------------------------------------
+--------------------------------------------------------------
+		gRNAs - Targetable Sites
+--------------------------------------------------------------
     \n""")
 	path = ""
 	if args["OUTPUT_PATH"][-1] == "/":
 		path = args["OUTPUT_PATH"]
 	else:
 		path = args["OUTPUT_PATH"] + "/"
+
+	final_df = None
 
 	if args["OUTPUT_FILE"] + "_crispr_df.csv" not in os.listdir(path):
 		crispr_df = extract_grna_sites(hugo_symbol=args["GENE"], searched_nucleotide=args["EDIT"],
@@ -2497,11 +2712,12 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 		print("CRISPR Data Frame was written in %s as %s\n" % (path, args["OUTPUT_FILE"] + "_crispr_df.csv"))
 
 	else:
+		print("CRISPR Data Frame was readed from %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_crispr_df.csv"))
 		crispr_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_crispr_df.csv")
 	print("""\n
-------------------------------------------------------
-               gRNAs - Editable Sites
-------------------------------------------------------
+--------------------------------------------------------------
+		gRNAs - Editable Sites
+--------------------------------------------------------------
     \n""")
 	if args["OUTPUT_FILE"] + "_edit_df.csv" not in os.listdir(path):
 		edit_df = find_editable_nucleotide(crispr_df=crispr_df, searched_nucleotide=args["EDIT"],
@@ -2516,24 +2732,32 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 		print("Edit Data Frame was written in %s as %s" % (path, args["OUTPUT_FILE"] + "_edit_df.csv\n"))
 
 	else:
+		print("Edit Data Frame was readed from %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_edit_df.csv"))
 		edit_df =pandas.read_csv(path + args["OUTPUT_FILE"] + "_edit_df.csv")
 
 	if args["VEP"]:
 		print("""\n
-------------------------------------------------------
-               Edits - VEP Annotation
-------------------------------------------------------
+--------------------------------------------------------------
+		Annotation - VEP Annotation
+--------------------------------------------------------------
         \n""")
 		if args["OUTPUT_FILE"] + "_vep_df.csv" not in os.listdir(path):
-			hgvs_df = extract_hgvs(edit_df=edit_df, ensembl_object=ensembl_obj,
-								   transcript_id=args["TRANSCRIPT"],
-								   edited_nucleotide=args["EDIT"], new_nucleotide=args["EDIT_TO"],
-								   activity_window=[int(args["ACTWINDOW"].split("-")[0]),
-													int(args["ACTWINDOW"].split("-")[1])],
-								   mutations=mutations)
+			if args["OUTPUT_FILE"] + "_hgvs_df.csv" not in os.listdir(path):
+				hgvs_df = extract_hgvs(edit_df=edit_df, ensembl_object=ensembl_obj,
+									   transcript_id=args["TRANSCRIPT"],
+									   edited_nucleotide=args["EDIT"], new_nucleotide=args["EDIT_TO"],
+									   activity_window=[int(args["ACTWINDOW"].split("-")[0]),
+														int(args["ACTWINDOW"].split("-")[1])],
+									   mutations=mutations)
+
+				if hgvs_df is not None and len(hgvs_df.index) != 0:
+					hgvs_df.to_csv(path + args["OUTPUT_FILE"] + "_hgvs_df.csv")
+					print("HGVS nomenclatures were collected.\n")
+			else:
+				hgvs_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_hgvs_df.csv")
+				print("HGVS nomenclatures were collected.\n")
 
 			if hgvs_df is not None and len(hgvs_df.index) != 0:
-				hgvs_df.to_csv(path + args["OUTPUT_FILE"] + "_hgvs_df.csv")
 				whole_vep_df = retrieve_vep_info(hgvs_df=hgvs_df, ensembl_object=ensembl_obj,
 												 transcript_id=args["TRANSCRIPT"])
 				if len(whole_vep_df.index) != 0:
@@ -2543,69 +2767,71 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 				else:
 					print("VEP Data Frame cannot be created because it is empty!")
 		else:
+			print("VEP Data Frame was readed from %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_vep_df.csv"))
 			whole_vep_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_vep_df.csv")
 
-		if args["PROTEIN"]:
-			print("""\n
-------------------------------------------------------
-	  		Edits - Uniprot Annotation
-------------------------------------------------------
-			\n""")
+		print("""\n
+--------------------------------------------------------------
+		Annotation - Protein Annotation
+--------------------------------------------------------------
+		\n""")
+		if args["OUTPUT_FILE"] + "_protein_df.csv" not in os.listdir(path):
+			print("Adding Uniprot ID, corresponding Domain and PTM information..")
+			if len(whole_vep_df.index) != 0:
+				uniprot_df = annotate_edits(ensembl_object=ensembl_obj, vep_df=whole_vep_df)
+				if uniprot_df is not None and len(uniprot_df.index) != 0:
+					print("Adding affected interface and interacting partners..")
+					protein_df = annotate_interface(annotated_edit_df=uniprot_df)
 
-			if args["OUTPUT_FILE"] + "_protein_df.csv" not in os.listdir(path):
-				print("Adding Uniprot ID, corresponding Domain and PTM information..\n")
-				if len(whole_vep_df.index) != 0:
-					uniprot_df = annotate_edits(ensembl_object=ensembl_obj, vep_df=whole_vep_df)
-					print("Uniprot information was added!\n")
-				print("""\n
-------------------------------------------------------
-		   Edits - 3D Interface Annotation
-------------------------------------------------------
-				\n""")
-
-			else:
-				uniprot_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_protein_df.csv")
-
-			if uniprot_df is not None and len(uniprot_df.index) != 0:
-
-				print("Adding affected interface and interacting partners..")
-
-				interaction_df = annotate_interface(annotated_edit_df=uniprot_df)
-
-				if interaction_df is not None and len(interaction_df.index) != 0:
-					print("Annotation Data Frame was created!")
-
-					interaction_df.to_csv(path + args["OUTPUT_FILE"] + "_protein_df.csv", index=False)
-
-					print("Protein Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +
-																			  "_protein_df.csv"))
-
-
-					print("""\n
-------------------------------------------------------
-			   Summary Data Frame 
-------------------------------------------------------
-					\n""")
-
-					print("Summarising information..")
-
-					summary_df = summarise_guides(last_df=interaction_df)
-
-					if summary_df is not None and len(summary_df.index) != 0:
-						print("Summary Data Frame was created!")
-
-						summary_df.to_csv(path + args["OUTPUT_FILE"] + "_summary_df.csv", index=False)
-
-						print("Summary Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +
-																				  "_summary_df.csv"))
+					if protein_df is not None and len(protein_df.index) != 0:
+						print("Protein Data Frame was created!")
+						protein_df.to_csv(path + args["OUTPUT_FILE"] + "_protein_df.csv", index=False)
+						print("Protein Data Frame was written in %s as %s\n" % (path, args["OUTPUT_FILE"] + "_protein_df.csv\n"))
 					else:
-						print("Summary Data Frame cannot be created because it is empty.")
-
+						print("Protein Data Frame cannot be created because it is empty.")
 				else:
 					print("Protein Data Frame cannot be created because it is empty.")
 			else:
 				print("Protein Data Frame cannot be created because it is empty.")
+		else:
+			print("Protein Data Frame was readed from %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_protein_df.csv"))
+			protein_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_protein_df.csv")
 
+		if len(protein_df.index) > 0:
+			if args["OUTPUT_FILE"] + "_summary_df.csv" not in os.listdir(path):
+				print("Summarising information..")
+				summary_df = summarise_guides(last_df=protein_df)
+
+				if summary_df is not None and len(summary_df.index) != 0:
+					print("Summary Data Frame was created!")
+					summary_df.to_csv(path + args["OUTPUT_FILE"] + "_summary_df.csv", index=False)
+					final_df = summary_df.copy()
+					print("Summary Data Frame was written in %s as %s\n\n" % (path, args["OUTPUT_FILE"] +"_summary_df.csv"))
+				else:
+					print("Summary Data Frame cannot be created because it is empty.")
+
+			else:
+				print("Summary Data Frame was readed from %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_summary_df.csv"))
+				summary_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_summary_df.csv")
+				final_df = summary_df.copy()
+		else:
+			print("Protein Data Frame cannot be created because it is empty.")
+
+	else:
+		final_df = edit_df.copy()
+
+	if args["OFF_TARGET"]:
+		print("""\n
+--------------------------------------------------------------
+		Annotation - Off Target Annotation
+--------------------------------------------------------------
+				\n""")
+		bestimate_ot_df = add_offtargets(genome= args["GENOME"], output_name=args["OUTPUT_FILE"],
+										 df=final_df, mm=mm, threads_num=4)
+		if len(bestimate_ot_df.index) > 0:
+			bestimate_ot_df.to_csv(path + args["OUTPUT_FILE"] + "_ot_annotated_summary_df.csv", index=False)
+		else:
+			print("Off target information cannot be added.")
 	return True
 
 
@@ -2615,8 +2841,8 @@ Protospacer length: %s\nActivity window: %s\nEdited nucleotide: %s\nNew nucleoti
 main()
 
 print("""\n
-------------------------------------------------------
-           The BEstimate analysis finished!
-------------------------------------------------------
+--------------------------------------------------------------
+	The BEstimate analysis successfully finished!
+--------------------------------------------------------------
 \n""")
 
