@@ -2599,12 +2599,12 @@ def add_offtargets(genome, output_name, df, mm, threads_num):
 	:return:
 	"""
 	global ot_path
-	crisprs = df[:10][["CRISPR_PAM_Sequence", "Direction"]].values
+	crisprs = df[["CRISPR_PAM_Sequence", "Direction"]].values
 	ot = run_offtargets(genome=genome, crisprs=crisprs, output_name=output_name, mm=mm, ot_vcf=False, threads_num=threads_num)
 	if ot:
 		ot_df = read_sam(output_name= output_name, crisprs=crisprs, mm=mm)
 		if len(ot_df.index) > 0:
-			df_final = pandas.merge(df[:10], ot_df, how="outer", on=["CRISPR_PAM_Sequence"])
+			df_final = pandas.merge(df, ot_df, how="outer", on=["CRISPR_PAM_Sequence"])
 			return df_final
 		else:
 			return False
