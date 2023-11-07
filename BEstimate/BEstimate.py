@@ -361,9 +361,9 @@ class Ensembl:
 					if mutation.split(":")[0] == self.chromosome:
 						if mutation.split(":")[1].split(".")[0] == "g":
 							alteration = mutation.split(":")[1].split(".")[1]
-							mutation_location = int(re.match("([0-9]+)([a-z]+)", alteration.split(">")[0], re.I).groups()[0])
-							altered_nuc = re.match("([0-9]+)([a-z]+)", alteration.split(">")[0], re.I).groups()[1]
-							new_nuc = alteration.split(">")[1]
+							mutation_location = int(re.match("([0-9]+)([a-z]+)", alteration.split("_")[0], re.I).groups()[0])
+							altered_nuc = re.match("([0-9]+)([a-z]+)", alteration.split("_")[0], re.I).groups()[1]
+							new_nuc = alteration.split("_")[1]
 
 							# Check if altered nucleotide is in the given location
 							if self.strand == 1:
@@ -1283,7 +1283,7 @@ def collect_mutation_location(mutations):
 		locations = list()
 		for mutation in mutations:
 			alteration = mutation.split(":")[1].split(".")[1]
-			mutation_location = re.match("([0-9]+)([a-z]+)", alteration.split(">")[0], re.I).groups()[0]
+			mutation_location = re.match("([0-9]+)([a-z]+)", alteration.split("_")[0], re.I).groups()[0]
 			if int(mutation_location) not in locations:
 				locations.append(int(mutation_location))
 		if locations:
@@ -1312,18 +1312,28 @@ def check_genome_for_mutation(genomic_range, direction, mutations, window_type, 
 					yes_mutation = True
 
 	elif window_type == "activity":
-		start = start + window[0]
-		end = start + window[1]
-		activity_sites = list(range(start, end))
+		if direction == "right":
+			act_start = start + window[0]
+			act_end = start + window[1]
+			activity_sites = list(range(act_start, act_end))
+		elif direction == "left":
+			act_start = start - window[0]
+			act_end = start - window[1]
+			activity_sites = list(range(act_end, act_start))
 		if mutations:
 			for loc in mutations:
 				if loc in activity_sites:
 					yes_mutation = True
 
 	elif window_type == "PAM":
-		start = start + window[0]
-		end = start + window[1]
-		pam_sites = list(range(start, end))
+		if direction == "right":
+			pam_start = start + window[0]
+			pam_end = start + window[1]
+			pam_sites = list(range(pam_start, pam_end))
+		elif direction == "left":
+			pam_start = start - window[0]
+			pam_end = start - window[1]
+			pam_sites = list(range(pam_end, pam_start))
 		if mutations:
 			for loc in mutations:
 				if loc in pam_sites:
@@ -1514,13 +1524,14 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 								activity_window[1] + 1
 						end = int(list(grna_df["Location"].values)[0].split(":")[1].split("-")[1]) - \
 							  activity_window[0]
-						guide_change_mutation = list()
+
+						mutations_on_window = list()
 						for mutation in mutation_locations:
 							if start <= mutation <= end:
-								guide_change_mutation.append(mutation)
+								mutations_on_window.append(mutation)
 
-						first_mut = max(guide_change_mutation)
-						last_mut = min(guide_change_mutation)
+						first_mut = max(mutations_on_window)
+						last_mut = min(mutations_on_window)
 						if first_mut > start:
 							start_ind = activity_window[0] - (first_mut - start)
 							start = first_mut
@@ -1600,13 +1611,14 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 								activity_window[1]+1
 						end = int(list(grna_df["Location"].values)[0].split(":")[1].split("-")[1]) - \
 							  activity_window[0]
-						guide_change_mutation = list()
+
+						mutations_on_window = list()
 						for mutation in mutation_locations:
 							if start <= mutation <= end:
-								guide_change_mutation.append(mutation)
+								mutations_on_window.append(mutation)
 
-						first_mut = max(guide_change_mutation)
-						last_mut = min(guide_change_mutation)
+						first_mut = max(mutations_on_window)
+						last_mut = min(mutations_on_window)
 						if first_mut > start:
 							start_ind = activity_window[0] - (first_mut - start)
 							start = first_mut
@@ -1676,13 +1688,13 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 						start = int(list(grna_df["Location"].values)[0].split(":")[1].split("-")[0]) + \
 								activity_window[0]
 
-						guide_change_mutation = list()
+						mutations_on_window = list()
 						for mutation in mutation_locations:
 							if start <= mutation <= end:
-								guide_change_mutation.append(mutation)
+								mutations_on_window.append(mutation)
 
-						first_mut = min(guide_change_mutation)
-						last_mut = max(guide_change_mutation)
+						first_mut = min(mutations_on_window)
+						last_mut = max(mutations_on_window)
 						if first_mut < start:
 							start_ind = activity_window[0] - (start - first_mut)
 							start = first_mut
@@ -1760,13 +1772,13 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 						start = int(list(grna_df["Location"].values)[0].split(":")[1].split("-")[0]) + \
 								activity_window[0]
 
-						guide_change_mutation = list()
+						mutations_on_window = list()
 						for mutation in mutation_locations:
 							if start <= mutation <= end:
-								guide_change_mutation.append(mutation)
+								mutations_on_window.append(mutation)
 
-						first_mut = min(guide_change_mutation)
-						last_mut = max(guide_change_mutation)
+						first_mut = min(mutations_on_window)
+						last_mut = max(mutations_on_window)
 						if first_mut < start:
 							start_ind = activity_window[0] - (start - first_mut)
 							start = first_mut
