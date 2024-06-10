@@ -42,6 +42,9 @@ def take_input():
 	parser.add_argument("-transcript", dest="TRANSCRIPT", default=None,
 						help="The interested ensembl transcript id")
 
+	parser.add_argument("-uniprot", dest="UNIPROT", default=None,
+						help="The interested Uniprot id")
+
 	# PAM AND PROTOSPACER INFORMATION
 
 	# The NGG PAM will be used unless otherwise specified.
@@ -1951,11 +1954,12 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 	return vep_df
 
 
-def annotate_edits(ensembl_object, vep_df):
+def annotate_edits(ensembl_object, vep_df, uniprot_id):
 	"""
 	Adding Uniprot API Information on VEP DF
 	:param ensembl_object: The object of the Ensembl from Ensembl API
 	:param vep_df: The data frame filled with the information from VEP API
+	:param uniprot_id: USer defined Uniprot ID - used as given
 	Ensembl Protein ID to Uniprot IDs (SwissProt/Reviewed)
 	:return: analysis_df: The data frame enriched with the information from Uniprot API
 	"""
@@ -1965,7 +1969,11 @@ def annotate_edits(ensembl_object, vep_df):
 	uniprot_df["curated_Domain"] = None
 	uniprot_df["PTM"] = None
 	print(vep_df["swissprot"].unique())
-	uniprot = list(vep_df["swissprot"].unique())[0]
+
+	if uniprot_id is not None:
+		uniprot = uniprot_id
+	else:
+		uniprot = list(vep_df["swissprot"].unique())[0]
 	ensembl_p = list(vep_df["Protein_ID"].unique())[0]
 	seq_mapping = ensembl_object.extract_uniprot_info(ensembl_pid=ensembl_p, uniprot=uniprot)
 	if seq_mapping:
@@ -2779,10 +2787,10 @@ def main():
 			mutations = None
 
 	print("""
-The given arguments are:\nGene: %s\nAssembl: %s\nEnsembl transcript ID: %s\nPAM sequence: %s\nPAM window: %s
+The given arguments are:\nGene: %s\nAssembl: %s\nEnsembl transcript ID: %s\nUniprot ID: %s\nPAM sequence: %s\nPAM window: %s
 Protospacer length: %s\nActivity window: %s\nNucleotide change: %s>%s\nVEP and Uniprot analysis: %s\nMutation on genome: %s
 Off target analysis: %s"""
-		  % (args["GENE"], args["ASSEMBLY"], args["TRANSCRIPT"], args["PAMSEQ"], args["PAMWINDOW"], args["PROTOLEN"],
+		  % (args["GENE"], args["ASSEMBLY"], args["TRANSCRIPT"], args["UNIPROT"], args["PAMSEQ"], args["PAMWINDOW"], args["PROTOLEN"],
 			 args["ACTWINDOW"], args["EDIT"], args["EDIT_TO"], vep, ", ".join("" if mutations is None else mutations),
 			 ot_analysis))
 
@@ -2908,7 +2916,7 @@ Off target analysis: %s"""
 		if args["OUTPUT_FILE"] + "_protein_df.csv" not in os.listdir(path):
 			print("Adding Uniprot ID, corresponding Domain and PTM information..")
 			if len(whole_vep_df.index) != 0:
-				uniprot_df = annotate_edits(ensembl_object=ensembl_obj, vep_df=whole_vep_df)
+				uniprot_df = annotate_edits(ensembl_object=ensembl_obj, vep_df=whole_vep_df, uniprot_id=args["UNIPROT"])
 				if uniprot_df is not None and len(uniprot_df.index) != 0:
 					print("Adding affected interface and interacting partners..")
 					protein_df = annotate_interface(annotated_edit_df=uniprot_df)
