@@ -4,25 +4,25 @@ BEstimate, a Python module that systematically identifies guide RNA (gRNA) targe
 
 ## Requirements
 
-Python 3.8
-pandas 1.1.3
-argparse 1.4
-biopython 1.78
-requests 2.28.1
+- Python 3.8
+- pandas 1.1.3
+- argparse 1.4
+- biopython 1.78
+- requests 2.28.1
 
 Or you can directly use BEstimate environment if you have conda. Please follow below:
 
-`git clone https://github.com/CansuDincer/BEstimate.git`
-`cd BEstimate`
-`conda-env create -n bestimate -f=bestimate.yml`
-`conda activate bestimate`
+- `git clone https://github.com/CansuDincer/BEstimate.git`
+- `cd BEstimate`
+- `conda-env create -n bestimate -f=bestimate.yml`
+- `conda activate bestimate`
 
 
 # Program requirement for Off targets analysis
 
 BEstimate is using [mrsfast algorithm](https://github.com/sfu-compbio/mrsfast) for genome alignment in off targets analysis. If you would like to find off targets, please follow below.
 
-`conda install -c bioconda mrsfast`
+- `conda install -c bioconda mrsfast`
 
 ## Inputs
 
@@ -100,7 +100,7 @@ OUTPUT INITIALS (Mandatory input): The initial name of the file before "_crispr_
 
 The user also run the same analysis for different PAM only changing -pamseq NGN. 
 
-*Warning: Be caferul to write the PAM sequence to be in concordant with the length of the -pamwin. Here, NGN is in concordant with 21-23 (3 nucleotides). Otherwise, the user need to write NG -pamseq with 21-22 -pamwin.* 
+*Warning: Be careful to write the PAM sequence to be in concordant with the length of the -pamwin. Here, NGN is in concordant with 21-23 (3 nucleotides). Otherwise, the user need to write NG -pamseq with 21-22 -pamwin.* 
 
 If you would like to run for a specific transcript and run the protein analysis:
 
@@ -111,7 +111,7 @@ If you would like to run with a specific point mutation, with NGN PAM and with V
 `python3 BEstimate.py -gene PIK3CA -assembly GRCh38 -pamseq NGN -pamwin 21-23 -actwin 4-8 -protolen 20 -mutation '3:g.179218303G>A' -edit A -edit_to G -vep -ofile ./PIK3CA_NGN_ABE_mE545K -o ./output/`
 
 If you would like to see the off targets of WRN gene:
-`python3 BEstimate.py -gene BRAF -assembly GRCh38 -pamseq NGN -edit A -edit_to G -vep -ot -mm 4 -o ./output/ -ofile BRAF_ABE_NGN`
+`python3 BEstimate.py -gene BRAF -assembly GRCh38 -pamseq NGN -edit A -edit_to G -vep -ot -mm 3 -o ./output/ -ofile BRAF_ABE_NGN`
 
 
 ## Contact
