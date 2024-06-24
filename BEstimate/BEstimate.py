@@ -706,8 +706,8 @@ class Ensembl:
 					alignment_df["u_index_%d" % a_num] = None
 					alignment_df["mismatch_%d" % a_num] = None
 					align_list = align.split("\n")[:3]
-					uni_index = 0
-					ens_index = 0
+					uni_index = 1
+					ens_index = 1
 					for i in range(len(align_list[0])):
 						ens = align_list[0][i]
 						a_style = align_list[1][i]
@@ -1822,12 +1822,13 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 	return hgvs_df
 
 
-def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
+def retrieve_vep_info(hgvs_df, ensembl_object, uniprot, transcript_id=None):
 	"""
 	Collect Ensembl VEP information for given edits
 	:param hgvs_df: The HGVS notations of all possible variants
 	:param ensembl_object: The Ensembl Object created with Ensembl().
 	:param transcript_id: The interested Ensembl transcript id
+	:param uniprot: User defined uniprot if given
 	:return uniprot_results: The Uniprot IDs in which edit occurs (swissprot or trembl)
 	"""
 
@@ -1838,9 +1839,9 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 
 	vep_columns = ["Protein_ID", "VEP_input", "allele", "variant_classification", "most_severe_consequence",
 				   "consequence_terms", "variant_biotype", "Regulatory_ID", "Motif_ID", "TFs_on_motif",
-				   "cDNA_Change", "Edited_Codon", "New_Codon", "CDS_Position", "Protein_Position",
+				   "cDNA_Change", "Edited_Codon", "New_Codon", "CDS_Position", "Protein_Position_ensembl",
 				   "Protein_Change", "Edited_AA", "Edited_AA_Prop", "New_AA", "New_AA_Prop", "is_Synonymous",
-				   "is_Stop", "proline_addition", "swissprot",
+				   "is_Stop", "proline_addition", "swissprot_vep", "uniprot_provided",
 				   "polyphen_score", "polyphen_prediction", "sift_score", "sift_prediction", "cadd_phred",
 				   "cadd_raw", "lof", "impact", "blosum62", "is_clinical", "clinical_id",
 				   "clinical_significance", "cosmic_id", "clinvar_id", "ancestral_populations"]
@@ -1918,7 +1919,7 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 		hgvs_df.loc[ind, "Edited_Codon"] = obj.old_codon
 		hgvs_df.loc[ind, "New_Codon"] = obj.new_codon
 		hgvs_df.loc[ind, "CDS_Position"] = obj.cds_position
-		hgvs_df.loc[ind, "Protein_Position"] = obj.protein_position
+		hgvs_df.loc[ind, "Protein_Position_ensembl"] = obj.protein_position
 		hgvs_df.loc[ind, "Protein_Change"] = obj.protein_change
 		hgvs_df.loc[ind, "Edited_AA"] = obj.old_aa
 		hgvs_df.loc[ind, "Edited_AA_Prop"] = obj.old_aa_chem
@@ -1927,7 +1928,8 @@ def retrieve_vep_info(hgvs_df, ensembl_object, transcript_id=None):
 		hgvs_df.loc[ind, "is_Synonymous"] = obj.synonymous
 		hgvs_df.loc[ind, "is_Stop"] = obj.stop
 		hgvs_df.loc[ind, "proline_addition"] = obj.proline
-		hgvs_df.loc[ind, "swissprot"] = obj.swissprot
+		hgvs_df.loc[ind, "swissprot_vep"] = obj.swissprot
+		hgvs_df.loc[ind, "uniprot_provided"] = uniprot
 		hgvs_df.loc[ind, "polyphen_score"] = obj.polyphen_score
 		hgvs_df.loc[ind, "polyphen_prediction"] = obj.polyphen_prediction
 		hgvs_df.loc[ind, "sift_score"] = obj.sift_score
@@ -1968,12 +1970,12 @@ def annotate_edits(ensembl_object, vep_df, uniprot_id):
 	uniprot_df["Domain"] = None
 	uniprot_df["curated_Domain"] = None
 	uniprot_df["PTM"] = None
-	print(vep_df["swissprot"].unique())
 
 	if uniprot_id is not None:
 		uniprot = uniprot_id
 	else:
-		uniprot = list(vep_df["swissprot"].unique())[0]
+		uniprot = list(vep_df["swissprot_vep"].unique())[0]
+
 	ensembl_p = list(vep_df["Protein_ID"].unique())[0]
 	seq_mapping = ensembl_object.extract_uniprot_info(ensembl_pid=ensembl_p, uniprot=uniprot)
 	if seq_mapping:
@@ -1982,9 +1984,24 @@ def annotate_edits(ensembl_object, vep_df, uniprot_id):
 		smap = seq_mapping[uniprot]
 		obj = Uniprot(uniprotid=uniprot)
 		obj.extract_uniprot()
+		uniprot_df["Protein_Position"] = None
 		for ind, row in uniprot_df.iterrows():
 			ptm, domain, c_domain = None, None, None
-			if row["Protein_Position"] is not None and pandas.isna(row["Protein_Position"]) is False:
+			if row["Protein_Position_ensembl"] is not None and pandas.isna(row["Protein_Position_ensembl"]) is False:
+
+				# First check if ensembl and uniprot sequences have same indices
+				if len(row["Protein_Position_ensembl"].split(";")) == 1:
+					position = int(row["Protein_Position_ensembl"])
+					if position in smap.keys(): uniprot_df.loc[ind, "Protein_Position"] = str(smap[position])
+				elif len(row["Protein_Position_ensembl"].split(";")) > 1:
+					pos_text_list = list()
+					for position in row["Protein_Position_ensembl"].split(";"):
+						position = int(position)
+						if position in smap.keys():
+							pos_text_list.append(str(smap[position]))
+
+					uniprot_df.loc[ind, "Protein_Position"] = ";".join(pos_text_list)
+
 				ptms, domains = list(), list()
 				for position in str(row["Protein_Position"]).split(";"):
 					if position is not None and position != "None" and type(position) != float:
@@ -2128,7 +2145,7 @@ def disrupt_interface(uniprot, pos):
 		return None, None, None
 
 
-def annotate_interface(annotated_edit_df):
+def annotate_interface(annotated_edit_df, uniprot_id):
 	"""
 	Add Interactome Insider protein interface information for edgetic perturbation.
 	:param annotated_edit_df: Data frame created with annotate_edits
@@ -2146,7 +2163,12 @@ def annotate_interface(annotated_edit_df):
 	df["disrupted_PDB_int_genes"] = None
 	df["disrupted_I3D_int_genes"] = None
 	df["disrupted_Eclair_int_genes"] = None
-	for group, group_df in df.groupby(["swissprot", "Protein_Position"]):
+
+	if uniprot_id is not None:
+		group_cols = ["uniprot_provided", "Protein_Position"]
+	else:
+		group_cols = ["swissprot_vep", "Protein_Position"]
+	for group, group_df in df.groupby(group_cols):
 		if group[1] is not None and group[1] != "None" and pandas.isna(group[1]) == False:
 			if group[0] in list(yulab.P1) or group[0] in list(yulab.P2):
 				all_pdb_partners, all_i3d_partners, all_eclair_partners = list(), list(), list()
@@ -2336,30 +2358,22 @@ def summarise_3di(list_of_partners):
 def summarise_guides(last_df):
 	summary_df = pandas.DataFrame(index=list(range(0, len(last_df.groupby(["CRISPR_PAM_Sequence"])))),
 								  columns=["Hugo_Symbol", "CRISPR_PAM_Sequence", "CRISPR_PAM_Location",
-										   "gRNA_Target_Sequence",
-										   "gRNA_Target_Location", "Edit_Location", "Direction", "Transcript_ID",
-										   "Exon_ID", "Protein_ID",
+										   "gRNA_Target_Sequence", "gRNA_Target_Location", "gRNA_flanking_sequences",
+										   "Edit_Location", "Direction", "Transcript_ID", "Exon_ID", "Protein_ID",
 										   "guide_in_CDS", "Edit_in_Exon", "Edit_in_CDS", "mutation_on_guide",
-										   "guide_change_mutation",
-										   "mutation_on_window", "mutation_on_PAM", "# Edits/guide", "Poly_T", "GC%",
-										   "allele", "cDNA_Change",
-										   "CDS_Position", "Protein_Position", "Protein_Change", "Edited_AA",
-										   "Edited_AA_Prop",
-										   "New_AA", "New_AA_Prop", "is_stop", "is_synonymous", "proline_addition",
-										   "variant_classification",
-										   "consequence_terms", "most_severe_consequence", "variant_biotype",
-										   "Regulatory_ID",
+										   "guide_change_mutation", "mutation_on_window", "mutation_on_PAM",
+										   "# Edits/guide", "Poly_T", "GC%", "allele", "cDNA_Change",
+										   "CDS_Position", "Protein_Position_ensembl", "Protein_Position",
+										   "Protein_Change", "Edited_AA", "Edited_AA_Prop", "New_AA", "New_AA_Prop", "is_stop",
+										   "is_synonymous", "proline_addition", "variant_classification", "consequence_terms",
+										   "most_severe_consequence", "variant_biotype", "Regulatory_ID",
 										   "Motif_ID", "TFs_on_motif", "polyphen_prediction", "sift_prediction",
-										   "impact",
-										   "is_clinical", "clinical_id", "clinical_significance", "cosmic_id",
-										   "clinvar_id",
-										   "ancestral_populations", "swissprot", "Domain", "curated_Domain", "PTM",
-										   "is_disruptive_interface_EXP", "disrupted_PDB_int_partners",
-										   "disrupted_PDB_int_genes", "is_disruptive_interface_MOD",
-										   "disrupted_I3D_int_partners",
-										   "disrupted_I3D_int_genes", "is_disruptive_interface_PRED",
-										   "disrupted_Eclair_int_partners",
-										   "disrupted_Eclair_int_genes"])
+										   "impact", "is_clinical", "clinical_id", "clinical_significance", "cosmic_id",
+										   "clinvar_id", "ancestral_populations", "swissprot_vep", "uniprot_provided",
+										   "Domain", "curated_Domain", "PTM", "is_disruptive_interface_EXP",
+										   "disrupted_PDB_int_partners", "disrupted_PDB_int_genes", "is_disruptive_interface_MOD",
+										   "disrupted_I3D_int_partners", "disrupted_I3D_int_genes", "is_disruptive_interface_PRED",
+										   "disrupted_Eclair_int_partners", "disrupted_Eclair_int_genes"])
 	# cosmic_freq
 
 	i = 0
@@ -2371,6 +2385,8 @@ def summarise_guides(last_df):
 			[x for x in list(guide_df.CRISPR_PAM_Location.unique()) if x is not None])
 		summary_df.loc[i, "gRNA_Target_Sequence"] = ";".join(
 			[x for x in list(guide_df.gRNA_Target_Sequence.unique()) if x is not None])
+		summary_df.loc[i, "gRNA_flanking_sequences"] = ";".join(
+			[x for x in list(guide_df.gRNA_flanking_sequences.unique()) if x is not None])
 		summary_df.loc[i, "gRNA_Target_Location"] = ";".join(
 			[x for x in list(guide_df.gRNA_Target_Location.unique()) if x is not None])
 		summary_df.loc[i, "Edit_Location"] = ";".join(
@@ -2418,6 +2434,8 @@ def summarise_guides(last_df):
 			[x for x in list(guide_df.CDS_Position.unique()) if x is not None and type(x) != float])
 		summary_df.loc[i, "Protein_Position"] = ";".join(
 			[str(x) for x in list(guide_df.Protein_Position.unique()) if x is not None and type(x) != float])
+		summary_df.loc[i, "Protein_Position_ensembl"] = ";".join(
+			[str(x) for x in list(guide_df.Protein_Position_ensembl.unique()) if x is not None and type(x) != float])
 		summary_df.loc[i, "Protein_Change"] = ";".join(
 			[x for x in list(guide_df.Protein_Change.unique()) if x is not None and type(x) != float])
 		summary_df.loc[i, "Edited_AA"] = ";".join(
@@ -2428,8 +2446,14 @@ def summarise_guides(last_df):
 			[x for x in list(guide_df.Edited_AA_Prop.unique()) if x is not None and type(x) != float])
 		summary_df.loc[i, "New_AA_Prop"] = ";".join(
 			[x for x in list(guide_df.New_AA_Prop.unique()) if x is not None and type(x) != float])
-		summary_df.loc[i, "swissprot"] = ";".join(
-			[x for x in list(guide_df.swissprot.unique()) if x is not None and type(x) != float])
+		summary_df.loc[i, "swissprot_vep"] = ";".join(
+			[x for x in list(guide_df.swissprot_vep.unique()) if x is not None and type(x) != float])
+
+		if guide_df.uniprot_provided.unique() is not None and type(guide_df.uniprot_provided) != float and list(guide_df.uniprot_provided.unique()):
+			summary_df.loc[i, "uniprot_provided"] = ";".join(
+				[x for x in list(guide_df.uniprot_provided.unique()) if x is not None and type(x) != float])
+		else:
+			summary_df.loc[i, "uniprot_provided"] = None
 		summary_df.loc[i, "variant_classification"] = ";".join(
 			[x for x in list(guide_df.variant_classification.unique()) if x is not None and type(x) != float])
 		summary_df.loc[i, "variant_biotype"] = ";".join(
@@ -2897,7 +2921,7 @@ Off target analysis: %s"""
 
 			if hgvs_df is not None and len(hgvs_df.index) != 0:
 				whole_vep_df = retrieve_vep_info(hgvs_df=hgvs_df, ensembl_object=ensembl_obj,
-												 transcript_id=args["TRANSCRIPT"])
+												 uniprot=args["UNIPROT"], transcript_id=args["TRANSCRIPT"])
 				if len(whole_vep_df.index) != 0:
 					print("VEP Data Frame was created!")
 					whole_vep_df.to_csv(path + args["OUTPUT_FILE"] + "_vep_df.csv")
@@ -2919,7 +2943,7 @@ Off target analysis: %s"""
 				uniprot_df = annotate_edits(ensembl_object=ensembl_obj, vep_df=whole_vep_df, uniprot_id=args["UNIPROT"])
 				if uniprot_df is not None and len(uniprot_df.index) != 0:
 					print("Adding affected interface and interacting partners..")
-					protein_df = annotate_interface(annotated_edit_df=uniprot_df)
+					protein_df = annotate_interface(annotated_edit_df=uniprot_df, uniprot_id=args["UNIPROT"])
 
 					if protein_df is not None and len(protein_df.index) != 0:
 						print("Protein Data Frame was created!")

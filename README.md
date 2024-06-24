@@ -1,4 +1,4 @@
-﻿# BEstimate
+# BEstimate
 
 BEstimate, a Python module that systematically identifies guide RNA (gRNA) targetable sites across given sequences for given Base Editors, functional and clinical effects of the potential edits on the resulting proteins and off target consequence of the found sequences. It has the ability to provide in silico analysis of the sequences to identify positions that can be editable by Base Editors, and their features before starting experiments. 
 
@@ -9,6 +9,20 @@ pandas 1.1.3
 argparse 1.4
 biopython 1.78
 requests 2.28.1
+
+Or you can directly use BEstimate environment if you have conda. Please follow below:
+
+`git clone https://github.com/CansuDincer/BEstimate.git`
+`cd BEstimate`
+`conda-env create -n bestimate -f=bestimate.yml`
+`conda activate bestimate`
+
+
+# Program requirement for Off targets analysis
+
+BEstimate is using [mrsfast algorithm](https://github.com/sfu-compbio/mrsfast) for genome alignment in off targets analysis. If you would like to find off targets, please follow below.
+
+`conda install -c bioconda mrsfast`
 
 ## Inputs
 
@@ -21,6 +35,9 @@ GENOME ASSEMBLY (Mandatory input - hg19/GRCh38): The genome assembly for interes
 
 *-transcript*
 ENSEMBL TRANSCRIPT ID (Optional input): The interested transcript for filtering the result, otherwise it uses canonical transcript from Ensembl. BEstimate first tries to MANE selected transcript, if not the Ensembl canonical transcript is obtained. 
+
+*-uniprot*
+UNIPROT ID (Optional input): The interested uniprot id for annotating the result, otherwise it uses VEP derived Uniprot ID. 
 
 *-mutation*
 MUTATION (Optional input - default= None): In the case that there is a mutation on the interested gene that you need to integrate into sequence to design gRNAs according to that. The mutation style should be in <chromosome:g.genomic_location edited_nucleotide>new_nucleotide> e.g. (3:g.179218303G>A).
@@ -96,101 +113,6 @@ If you would like to run with a specific point mutation, with NGN PAM and with V
 If you would like to see the off targets of WRN gene:
 `python3 BEstimate.py -gene BRAF -assembly GRCh38 -pamseq NGN -edit A -edit_to G -vep -ot -mm 4 -o ./output/ -ofile BRAF_ABE_NGN`
 
-## Interpretation of BEstimate results
-
-BEstimate will produce different files.
-
-**CRISPR_df** represents all possible gRNA target sites from both directions.
-- Hugo_Symbol: Hugo Symbol of the corresponding gene location.
-- CRISPR_PAM_Sequence gRNA target sequence with including PAM region.
-- gRNA_Target_Sequence: gRNA target sequence without PAM region.
-- Location: Location of the gRNA target sequence (chromosome:start location:end location).
-- Direction: Direction of the gRNA.
-- Gene_ID: Ensembl Gene ID of the interested Hugo Symbol.
-- Transcript_ID: Ensembl Transcript ID of the interested Hugo Symbol in the corresponding gene location.
-- Exon_ID:  Ensembl Exon ID of the interested Hugo Symbol in the corresponding gene location.
-- guide_in_CDS: If gRNA has any nucleotide inside a coding sequence of the gene. 
-- gRNA_flanking_sequences: In case that user has given *-flan* option. 
-
-**EDIT_df** adds information for all possible gRNA target sites if they can be edited with the given base editors and edit/edit_to parameters, if the edit is on the exon or not. Additional columns are below:
-- Edit_in_Exon: Boolean output representing if the specified edit in the Edit Location happening on the exon or not.
-- Edit_in_CDS: Boolean output representing if the specified edit in the Edit Location happening on the coding sequence or not.
-- \# Edits/guide: The number of editable nucleotide in gRNAs.
-- Poly_T:  Boolean output representing if CRISPR_PAM_Sequence has consecutive 4 T nucleotides.
-- guide_on_mutation: Boolean output representing if given mutation location inside gRNA (in the case that mutation information given by the user).
-- guide_change_mutation: Boolean output representing if gRNA can change the mutated nucleotide (in the case that mutation information given by the user).
-
-**HGVS_df** is a transient data frame including HGVS nomenclature of the potential edits for further VEP analysis. Additional columns are below:
-
-- HGVS:  HGVS nomenclature of the potential edit.
-
-**VEP_df** represents functional and clinical consequences of all possible edits in all possible gRNAs. Additional columns are below:
-
-- Protein_ID:  Ensembl Protein ID of the potential edit.
-- VEP_input: HGVS nomenclature of the potential edit.
-- allele: Allelic change of the potential edit.
-- variant_classification: VEP classification of the resulting variant of the potential edit. (Substitution, SNV etc.)
-- most_severe_consequence: The most severe consequence of the resulting variant of the potential edit.
-- consequence_terms: List of functional consequences of the resulting variant of the potential edit (splice region, missense, stop gain etc.)
-- variant_biotype:  The biotype of the variant created by the potential edit.
-- Regulatory_ID: Ensembl Regulatory ID of the potential edit.
-- Motif_ID: Ensembl Model ID of the potential edit.
-- TFs_on_motif: List of transcription factors on the Ensembl Regulatory ID of the potential edit.
-- cDNA_Change: cDNA changes resulting from the possible edits with the corresponding guides (position old nucleotide> new nucleotide)
-- Edited_codon: Codon sequence before the corresponding edit.
-- New_codon: Codon sequence after the corresponding edit.
-- CDS_Position: Position on the coding sequence of the potential edit.
-- Protein_Position: Location of the corresponding edit on the resulting protein (as Uniprot index).
-- Protein_Change: Protein sequence change with the corresponding edit (old amino asid - position - new amino asid).
-- Edited_AA: One letter representation of the amino asid before the corresponding edit.
-- Edited_AA_Prop: Chemical properties of the amino asid before the corresponding edit.
-- New_AA: One letter representation of the amino asid after the corresponding edit.
-- New_AA_Prop: Chemical properties of the amino asid after the corresponding edit.
-- is_Synonymous: Boolean output representing if the resulting edit causes synonymous or non-synonymous mutations.
-- is_Stop: Boolean output representing if the resulting edit causes stop codon or not.
-- proline_addition: Boolean output representing if potential edit created a Proline amino acid or not. 
-- swissprot: SwissProt ID of the corresponding gRNA target site region from Ensembl VEP.
-- polyphen_score: Polyphen Score of the corresponding edit.
-- polyphen_prediction: Polyphen Prediction of the corresponding edit.
-- sift_score: Sift Score of the corresponding edit.
-- sift_prediction: Sift Prediction of the corresponding edit.
-- cadd_phred: Curated CADD Score of the corresponding edit.
-- cadd_raw: Raw CADD Score of the corresponding edit.
-- lof: representing if the corresponding edit causes Loss of function with high confidence (HC)/Low confidence (LC) or not by implementing [LOFTEE](https://github.com/konradjk/loftee) through VEP.
-- impact: Impact of the corresponding edit.
-- blosum62: blosum62 Score of the corresponding edit.
-- is_clinical: Boolean output representing if there is a collocated clinical variant on the potential edit site.
-- clinical_id: dbSNP id of the clinical allele.
-- clinical_significance: Clinical significance of the corresponding edit.
-- cosmic_id: COSMIC id of the clinical allele.
-- clinvar_id: ClinVar id of the clinical allele.
-- ancestral_populations: The conservation score from the Ensembl Compara databases  
-for potential edit site (if any). 
-
-**protein_df** represents functional consequences of all possible edits on corresponding protein. Additional columns are below:
-
-- Domain: Functional domain name of the potential edit site.
-- curated_Domain: Human friendly functional domain name of the potential edit site.
-- PTM: Post translational modificaton on the potential edit site.
-- is_disruptive_interface_EXP: Boolean output representing if the corresponding edit happening on the interface region and having an experimental evidence (PDB). *High confidence*
-- is_disruptive_interface_MOD: Boolean output representing if the corresponding edit happening on the interface region and having evidence from a model (Interactome3D). *Medium confidence*
-- is_disruptive_interface_PRED: Boolean output representing if the corresponding edit happening on the interface region and having evidence from prediction (Interactome Insider). *Low confidence*
-- disrupted_PDB_int_partners: List of partner proteins whose interactions are disrupted by the corresponding edit according to experimental evidence - PDB. 
-- disrupted_I3D_int_partners: List of partner proteins whose interactions are disrupted by the corresponding edit according to Interactome3D.
-- disrupted_Eclair_int_partners: List of partner proteins whose interactions are disrupted by the corresponding edit according to Eclair - prediction algorithm of Interactome Insider. 
-- disrupted_PDB_int_genes: List of partner genes (Hugo Symbols) whose interactions are disrupted by the corresponding edit according to experimental evidence - PDB. 
-- disrupted_I3D_int_genes: List of partner genes (Hugo Symbols) whose interactions are disrupted by the corresponding edit according to Interactome3D.
-- disrupted_Eclair_int_genes: List of partner genes (Hugo Symbols) whose interactions are disrupted by the corresponding edit according to Eclair - prediction algorithm of Interactome Insider. 
-
-**summary_df** summarises all above information (each gRNA annotation has only one row). 
-
-**ot_annotated_summary_df** adds off target information on summary file.  Additional columns are below:
-
-- exact: The number of exact alignments of gRNA sequence.
-- mm1: The number of alignments of gRNA sequence with one mismatch.
-- mm2: The number of alignments of gRNA sequence with two mismatches.
-- mm3: The number of alignments of gRNA sequence with three mismatches.
-- mm4: The number of alignments of gRNA sequence with four mismatches.
 
 ## Contact
 
