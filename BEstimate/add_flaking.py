@@ -108,4 +108,4 @@ if __name__ == '__main__':
 	if args["PATH"][-1] == "/": path = args["PATH"]
 	else: path = args["PATH"] + "/"
 
-	_ = main()
+	_ = main(args)
