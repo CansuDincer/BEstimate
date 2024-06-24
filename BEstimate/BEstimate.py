@@ -2654,7 +2654,7 @@ def run_offtargets(genome, crisprs, output_name, mm, ot_vcf, threads_num):
 	:param mm: Number of max mismatch allowed
 	:return:
 	"""
-	global ot_path, mrsfast_path
+	global ot_path
 	if "%s_alignment.sam" % output_name not in os.listdir(ot_path + "/sam_files/"):
 		# Create fasta file
 		print("Writing Fasta file..")
@@ -3038,7 +3038,6 @@ if __name__ == '__main__':
 		path = args["OUTPUT_PATH"] + "/"
 
 	ot_path = os.getcwd() + "/../offtargets"
-	mrsfast_path = os.getcwd() + "/../bin/mrsfast"
 
 	# -----------------------------------------------------------------------------------------#
 	# Data w/out API opportunity
