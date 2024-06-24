@@ -2992,12 +2992,23 @@ Off target analysis: %s"""
 --------------------------------------------------------------
 				\n""")
 
-		bestimate_ot_df = add_offtargets(genome=args["GENOME"], output_name=args["OUTPUT_FILE"],
-										 df=final_df, mm=mm, threads_num=4)
-		if bestimate_ot_df is not False:
-			bestimate_ot_df.to_csv(path + args["OUTPUT_FILE"] + "_ot_annotated_summary_df.csv", index=False)
+		os.mkdir(os.getcwd() + "/../offtargets")
+		os.mkdir(os.getcwd() + "/../offtargets/sam_files/")
+		os.mkdir(os.getcwd() + "/../offtargets/fasta/")
+		os.mkdir(os.getcwd() + "/../offtargets/fasta_dict/")
+		os.mkdir(os.getcwd() + "/../offtargets/of_files/")
+		os.mkdir(os.getcwd() + "/../offtargets/genome/")
+
+		if "Homo_sapiens_GRCh38_dna_sm_all_chromosomes.fa.index" not in os.listdir(os.getcwd() + "/../offtargets/genome/"):
+			print("Please download genome and index it")
+
 		else:
-			print("Off target information cannot be added.")
+			bestimate_ot_df = add_offtargets(genome=args["GENOME"], output_name=args["OUTPUT_FILE"],
+											 df=final_df, mm=mm, threads_num=4)
+			if bestimate_ot_df is not False:
+				bestimate_ot_df.to_csv(path + args["OUTPUT_FILE"] + "_ot_annotated_summary_df.csv", index=False)
+			else:
+				print("Off target information cannot be added.")
 	return True
 
 
