@@ -2992,12 +2992,23 @@ Off target analysis: %s"""
 --------------------------------------------------------------
 				\n""")
 
-		os.mkdir(os.getcwd() + "/../offtargets")
-		os.mkdir(os.getcwd() + "/../offtargets/sam_files/")
-		os.mkdir(os.getcwd() + "/../offtargets/fasta/")
-		os.mkdir(os.getcwd() + "/../offtargets/fasta_dict/")
-		os.mkdir(os.getcwd() + "/../offtargets/of_files/")
-		os.mkdir(os.getcwd() + "/../offtargets/genome/")
+		try:
+			os.mkdir(os.getcwd() + "/../offtargets")
+		except FileExistsError:
+			pass
+
+		try:
+			os.mkdir(os.getcwd() + "/../offtargets/genome/")
+		except FileExistsError:
+			pass
+
+		try:
+			os.mkdir(os.getcwd() + "/../offtargets/sam_files/")
+			os.mkdir(os.getcwd() + "/../offtargets/fasta/")
+			os.mkdir(os.getcwd() + "/../offtargets/fasta_dict/")
+			os.mkdir(os.getcwd() + "/../offtargets/of_files/")
+		except FileExistsError:
+			pass
 
 		if "Homo_sapiens_GRCh38_dna_sm_all_chromosomes.fa.index" not in os.listdir(os.getcwd() + "/../offtargets/genome/"):
 			print("Please download genome and index it")
