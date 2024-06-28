@@ -101,7 +101,7 @@ def take_input():
 						help="Whether off targets will be computed or not")
 	parser.add_argument("-mm", dest="MISMATCH", default=4,
 						help="(If -ot provided) number of maximum mismatches allowed in off targets")
-	parser.add_argument("-genome", dest="GENOME", default="Homo_sapiens_GRCh38_dna_sm_all_chromosomes",
+	parser.add_argument("-genome", dest="GENOME", default="Homo_sapiens.GRCh38.dna_sm.chromosome.all.final",
 						help="(If -ot provided) name of the genome file")
 
 	parsed_input = parser.parse_args()
