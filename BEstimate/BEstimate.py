@@ -3010,7 +3010,7 @@ Off target analysis: %s"""
 		except FileExistsError:
 			pass
 
-		if "Homo_sapiens_GRCh38_dna_sm_all_chromosomes.fa.index" not in os.listdir(os.getcwd() + "/../offtargets/genome/"):
+		if "Homo_sapiens.GRCh38.dna_sm.chromosome.all.final.fa.index" not in os.listdir(os.getcwd() + "/../offtargets/genome/"):
 			print("Please download genome and index it")
 
 		else:
