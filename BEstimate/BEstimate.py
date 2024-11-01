@@ -12,7 +12,7 @@ import os, sys, pandas, re, argparse, requests, json, itertools, pickle
 from Bio import SeqIO
 from Bio import pairwise2
 from Bio.pairwise2 import format_alignment
-
+import numpy as np
 
 # -----------------------------------------------------------------------------------------#
 # Take inputs
@@ -2386,7 +2386,7 @@ def summarise_guides(last_df):
 		summary_df.loc[i, "gRNA_Target_Sequence"] = ";".join(
 			[x for x in list(guide_df.gRNA_Target_Sequence.unique()) if x is not None])
 		summary_df.loc[i, "gRNA_flanking_sequences"] = ";".join(
-			[x for x in list(guide_df.gRNA_flanking_sequences.unique()) if x is not None])
+			[str(x) for x in list(guide_df.gRNA_flanking_sequences.unique()) if x is not None and isinstance(x, float) and not np.isnan(x)])
 		summary_df.loc[i, "gRNA_Target_Location"] = ";".join(
 			[x for x in list(guide_df.gRNA_Target_Location.unique()) if x is not None])
 		summary_df.loc[i, "Edit_Location"] = ";".join(
