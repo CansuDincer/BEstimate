@@ -1428,11 +1428,10 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window, pa
 		edit_df.loc[edit_df.gRNA_Target_Sequence == guide, "# Edits/guide"] = unique_edits_per_guide
 
 	edit_df["Poly_T"] = edit_df.apply(
-		lambda x: True if re.search("T{4,}", x.CRISPR_PAM_Sequence) is not None else False, axis=1)
+		lambda x: True if re.search("T{4,}", x.gRNA_Target_Sequence) is not None else False, axis=1)
 
 	edit_df["GC%"] = edit_df.apply(
-		lambda x: (x.CRISPR_PAM_Sequence.count("C") + x.CRISPR_PAM_Sequence.count("G")) * 100.0 / len(
-			x.CRISPR_PAM_Sequence), axis=1)
+		lambda x: (x.gRNA_Target_Sequence.count("C") + x.gRNA_Target_Sequence.count("G")) * 100.0 / len(x.gRNA_Target_Sequence), axis=1)
 
 	mutation_locations = collect_mutation_location(mutations=mutations)
 
