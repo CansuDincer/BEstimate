@@ -36,7 +36,7 @@ def take_input():
 	parser.add_argument("-gene", dest="GENE", required=True,
 						help="The hugo symbol of the interested gene!")
 
-	parser.add_argument("-assembly", dest="ASSEMBLY", required=True,
+	parser.add_argument("-assembly", dest="ASSEMBLY", required=True, default="GRCh38",
 						help="The genome assembly that will be used!")
 
 	parser.add_argument("-transcript", dest="TRANSCRIPT", default=None,
