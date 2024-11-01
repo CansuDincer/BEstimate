@@ -2,14 +2,6 @@
 
 BEstimate, a Python module that systematically identifies guide RNA (gRNA) targetable sites across given sequences for given Base Editors, functional and clinical effects of the potential edits on the resulting proteins and off target consequence of the found sequences. It has the ability to provide in silico analysis of the sequences to identify positions that can be editable by Base Editors, and their features before starting experiments. 
 
-## Requirements
-
-- Python 3.8
-- pandas 1.1.3
-- argparse 1.4
-- biopython 1.78
-- requests 2.28.1
-
 Or you can directly use BEstimate environment if you have conda. Please follow below:
 
 - `git clone https://github.com/CansuDincer/BEstimate.git`
@@ -125,7 +117,7 @@ For any problems or feedback on BEstimate, you can contact [here](mailto:cd7@san
 BEstimate, a Python module that systematically identifies guide RNA (gRNA) 
 on and off target sites across given sequences for given Base Editors, and functional and clinical effects of the potential edits on the resulting proteins. 
 
-Copyright (c) 2020-2023 Genome Research Ltd. 
+Copyright (c) 2020 Genome Research Ltd. 
 
 Author: Cansu Dincer <cd7@sanger.ac.uk> 
 
