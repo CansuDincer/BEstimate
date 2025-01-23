@@ -8,7 +8,7 @@
 # -----------------------------------------------------------------------------------------#
 
 # Import necessary packages
-import os, sys, pandas, re, argparse, requests, json, itertools, pickle
+import os, sys, pandas, re, argparse, requests, json, itertools, pickle, time, numpy
 from Bio import SeqIO
 from Bio import pairwise2
 from Bio.pairwise2 import format_alignment
@@ -269,25 +269,31 @@ class Ensembl:
 		print("Request to Ensembl REST API for Ensembl Gene ID:")
 		gene_request = requests.get(self.server + hugo_ensembl,
 									headers={"Content-Type": "application/json"})
-
+		print(gene_request)
 		if gene_request.status_code != 200:
 			print("No response from ensembl!\n")
 
 		for x in gene_request.json():
 			if x["id"][:4] == "ENSG":
-				seq_ensembl = self.server + "/sequence/id/%s?" % x["id"]
-				seq_request = requests.get(seq_ensembl,
-										   headers={"Content-Type": "text/x-fasta"})
-				print(seq_request.text.split("\n")[0])
-				chr = seq_request.text.split("\n")[0].split(":")[2].strip()
-				try:
-					if chr != "X" and chr != "Y":
-						int(chr)
-						self.gene_id = x["id"]
-					elif chr == "X" or chr == "Y":
-						self.gene_id = x["id"]
-				except ValueError:
-					print(" ")
+
+				info_ensembl = self.server + "/lookup/id/%s?expand=1" % x["id"]
+				info_request = requests.get(info_ensembl,
+											headers={"Content-Type": "text/x-fasta"})
+
+				if info_request.json()["display_name"] == self.hugo_symbol:
+					seq_ensembl = self.server + "/sequence/id/%s?" % x["id"]
+					seq_request = requests.get(seq_ensembl,
+											   headers={"Content-Type": "text/x-fasta"})
+					print(seq_request.text.split("\n")[0])
+					chr = seq_request.text.split("\n")[0].split(":")[2].strip()
+					try:
+						if chr != "X" and chr != "Y":
+							int(chr)
+							self.gene_id = x["id"]
+						elif chr == "X" or chr == "Y":
+							self.gene_id = x["id"]
+					except ValueError:
+						print(" ")
 
 		if self.gene_id != '':
 			print("Ensembl Gene ID: %s\n" % self.gene_id)
@@ -295,7 +301,7 @@ class Ensembl:
 		else:
 			return 0
 
-	def extract_sequence(self, gene_id, mutations=None):
+	def extract_sequence(self, gene_id, mutations):
 
 		seq_ensembl = self.server + "/sequence/id/%s?" % gene_id
 		seq_flan_ensembl = self.server + "/sequence/id/%s?expand_3prime=23;expand_5prime=23" % gene_id
@@ -443,7 +449,7 @@ class Ensembl:
 
 		return grna_flan_request.text
 
-	def extract_info(self, chromosome, loc_start, loc_end, transcript=None):
+	def extract_info(self, chromosome, loc_start, loc_end, transcript):
 
 		if loc_start < loc_end:
 			ensembl = "/overlap/region/human/%s:%s-%s?feature=transcript;feature=exon;feature=mane;" \
@@ -462,6 +468,7 @@ class Ensembl:
 			print("No response from ensembl!")
 		else:
 			canonicals = list()
+			refseq = ''
 			for output in request.json():
 				if transcript is None:
 					if output["feature_type"] == "mane" and output["Parent"] == self.gene_id:
@@ -469,6 +476,7 @@ class Ensembl:
 							if output["type"] != "MANE_Plus_Clinical":
 								if output["id"].split(".")[0] not in canonicals:
 									canonicals.append(output["id"].split(".")[0])
+									refseq = output["id"].split(".")[0]
 
 								if output["id"].split(".")[0] in canonicals:
 									if output["id"] not in info_dict.keys():
@@ -502,24 +510,27 @@ class Ensembl:
 									old_val.append(
 										{"start": output["start"], "end": output["end"]})
 									info_dict[output["id"]] = old_val
-
 				else:
 					# Selected transcript
-					if output["feature_type"] == "transcript" and output["Parent"] == self.gene_id:
-						transcript_info = "/lookup/id/%s?expand=1;mane=1" % output["transcript_id"]
+					if output["Parent"] == self.gene_id and output["id"].split(".")[0] == transcript:
+						transcript_info = "/lookup/id/%s?expand=1;mane=1" % output["id"]
 						transcript_request = requests.get(self.server + transcript_info,
 														  headers={"Content-Type": "application/json"})
-						transcript_output = transcript_request.json()
-						if output["transcript_id"] not in info_dict.keys():
-							info_dict[output["transcript_id"]] = \
-								[{"start": transcript_output["start"], "end": transcript_output["end"]}]
-
+						if transcript_request.status_code != 200:
+							print("No response from ensembl for transcript id!")
 						else:
-							old_val = info_dict[output["transcript_id"]]
-							if {"start": transcript_request["start"], "end": transcript_request["end"]} not in old_val:
-								old_val.append(
-									{"start": transcript_request["start"], "end": transcript_request["end"]})
-								info_dict[output["transcript_id"]] = old_val
+							transcript_output = transcript_request.json()
+							if transcript not in info_dict.keys():
+								info_dict[transcript] = \
+									[{"start": transcript_output["start"], "end": transcript_output["end"]}]
+
+							else:
+								old_val = info_dict[transcript]
+								if {"start": transcript_output["start"],
+									"end": transcript_output["end"]} not in old_val:
+									old_val.append(
+										{"start": transcript_output["start"], "end": transcript_output["end"]})
+									info_dict[transcript] = old_val
 
 			for output in request.json():
 				if output["feature_type"] == "cds" and info_dict != {} and output["Parent"] in info_dict.keys():
@@ -539,34 +550,38 @@ class Ensembl:
 								d["cds"][output["protein_id"]] = t
 						if d not in info_dict[output["Parent"]]:
 							info_dict[output["Parent"]][k] = d
+			if refseq:
+				selected_transcript = [refseq]
+			else:
+				protein_ids = list()
+				swiss_protein_ids = list()
+				selected_transcript = list()
+				for ids in info_dict.keys():
+					for d in info_dict[ids]:
+						if "cds" in d.keys():
+							protein_ids.extend(d["cds"].keys())
 
-			protein_ids = list()
-			swiss_protein_ids = list()
-			selected_transcript = list()
-			for ids in info_dict.keys():
-				for d in info_dict[ids]:
-					if "cds" in d.keys():
-						protein_ids.extend(d["cds"].keys())
-			if protein_ids:
-				for p in protein_ids:
-					protein_ensembl = "/xrefs/id/{0}?external_db=Uniprot/SWISSPROT%".format(p)
-					protein_request = requests.get(self.server + protein_ensembl,
-												   headers={"Content-Type": "application/json"})
-					for i in protein_request.json():
-						if i["dbname"] == "Uniprot/SWISSPROT":
-							swiss_protein_ids.append(p)
-				if swiss_protein_ids:
-					for p in swiss_protein_ids:
-						for ids in info_dict.keys():
-							for d in info_dict[ids]:
-								if "cds" in d.keys():
-									if p in d["cds"].keys():
-										if ids not in selected_transcript:
-											selected_transcript.append(ids)
+				if protein_ids:
+					for p in protein_ids:
+						protein_ensembl = "/xrefs/id/{0}?external_db=Uniprot/SWISSPROT%".format(p)
+						protein_request = requests.get(self.server + protein_ensembl,
+													   headers={"Content-Type": "application/json"})
+						for i in protein_request.json():
+							if i["dbname"] == "Uniprot/SWISSPROT":
+								swiss_protein_ids.append(p)
+					if swiss_protein_ids:
+						for p in swiss_protein_ids:
+							for ids in info_dict.keys():
+								for d in info_dict[ids]:
+									if "cds" in d.keys():
+										if p in d["cds"].keys():
+											if ids not in selected_transcript:
+												selected_transcript.append(ids)
+
 					else:
 						selected_transcript = list(info_dict.keys())
-			else:
-				selected_transcript = list(info_dict.keys())
+				else:
+					selected_transcript = list(info_dict.keys())
 
 			if selected_transcript:
 				info_dict2 = {key: info_dict[key] for key in info_dict.keys() if key in selected_transcript}
@@ -666,121 +681,121 @@ class Ensembl:
 														for k in range(
 										int(i["ensembl_end"]) - int(i["ensembl_start"]) + 1)}
 
-			if seq_mapping == dict():
-				# Alignment
-				uniprot_obj = Uniprot(uniprotid=uniprot)
-				uniprot_obj.extract_uniprot()
-				uniprot_seq = uniprot_obj.sequence
+		if seq_mapping == dict() or seq_mapping == 0:
+			# Alignment
+			uniprot_obj = Uniprot(uniprotid=uniprot)
+			uniprot_obj.extract_uniprot()
+			uniprot_seq = uniprot_obj.sequence
 
-				if self.p_sequence is not None:
-					ensembl_seq = self.p_sequence
+			if self.p_sequence is not None:
+				ensembl_seq = self.p_sequence
+			else:
+				seq_ensembl = self.server + "/sequence/id/%s?" % ensembl_pid
+				seq_request = requests.get(seq_ensembl,
+										   headers={"Content-Type": "text/x-fasta"})
+
+				if seq_request.status_code != 200 and seq_flan_request.status_code != 200:
+					print("No response from ensembl protein sequence!\n")
+
 				else:
-					seq_ensembl = self.server + "/sequence/id/%s?" % ensembl_pid
-					seq_request = requests.get(seq_ensembl,
-											   headers={"Content-Type": "text/x-fasta"})
+					label_line = seq_request.text.split("\n")[0]
+				if label_line[0] != "{":
+					self.p_sequence = "".join(seq_request.text.split("\n")[1:])
+					ensembl_seq = self.p_sequence
 
-					if seq_request.status_code != 200 and seq_flan_request.status_code != 200:
-						print("No response from ensembl protein sequence!\n")
+			alignment_f = open(path + args["OUTPUT_FILE"] + "_%s_alignment.txt" % uniprot, "w")
+			alignments = list()
+			for a in pairwise2.align.globalms(ensembl_seq, uniprot_seq, 2, -1, -1, -0.1):
+				alignment_f.write(format_alignment(*a, full_sequences=True))
+				alignments.append(format_alignment(*a, full_sequences=True))
+			alignment_f.close()
 
-					else:
-						label_line = seq_request.text.split("\n")[0]
-					if label_line[0] != "{":
-						self.p_sequence = "".join(seq_request.text.split("\n")[1:])
-						ensembl_seq = self.p_sequence
+			ens = alignments[0].split("\n")[:3]
+			alignment_df = pandas.DataFrame(0, index=list(range(len(ens[0]))),
+											columns=["e_aa", "e_index"])
+			alignment_df["e_aa"] = [aa for aa in ens[0]]
 
-				alignment_f = open(path + args["OUTPUT_FILE"] + "_%s_alignment.txt" % uniprot, "w")
-				alignments = list()
-				for a in pairwise2.align.globalms(ensembl_seq, uniprot_seq, 2, -1, -1, -0.1):
-					alignment_f.write(format_alignment(*a, full_sequences=True))
-					alignments.append(format_alignment(*a, full_sequences=True))
-				alignment_f.close()
+			alignment_dict = {i: alignments[i] for i in range(len(alignments))}
+			for a_num, align in alignment_dict.items():
+				alignment_df["u_aa_%d" % a_num] = None
+				alignment_df["u_index_%d" % a_num] = None
+				alignment_df["mismatch_%d" % a_num] = None
+				align_list = align.split("\n")[:3]
+				uni_index = 1
+				ens_index = 1
+				for i in range(len(align_list[0])):
+					ens = align_list[0][i]
+					a_style = align_list[1][i]
+					uni = align_list[2][i]
 
-				ens = alignments[0].split("\n")[:3]
-				alignment_df = pandas.DataFrame(0, index=list(range(len(ens[0]))),
-												columns=["e_aa", "e_index"])
-				alignment_df["e_aa"] = [aa for aa in ens[0]]
-
-				alignment_dict = {i: alignments[i] for i in range(len(alignments))}
-				for a_num, align in alignment_dict.items():
-					alignment_df["u_aa_%d" % a_num] = None
-					alignment_df["u_index_%d" % a_num] = None
-					alignment_df["mismatch_%d" % a_num] = None
-					align_list = align.split("\n")[:3]
-					uni_index = 1
-					ens_index = 1
-					for i in range(len(align_list[0])):
-						ens = align_list[0][i]
-						a_style = align_list[1][i]
-						uni = align_list[2][i]
-
-						if a_style == "|":
-							# Match
+					if a_style == "|":
+						# Match
+						alignment_df.loc[i, "e_index"] = ens_index
+						alignment_df.loc[i, "u_aa_%d" % a_num] = uni
+						alignment_df.loc[i, "u_index_%d" % a_num] = uni_index
+						alignment_df.loc[i, "mismatch_%d" % a_num] = False
+						uni_index += 1
+						ens_index += 1
+					elif a_style == ".":
+						# Mismatch
+						alignment_df.loc[i, "e_index"] = ens_index
+						alignment_df.loc[i, "u_aa_%d" % a_num] = uni
+						alignment_df.loc[i, "u_index_%d" % a_num] = uni_index
+						alignment_df.loc[i, "mismatch_%d" % a_num] = True
+						uni_index += 1
+						ens_index += 1
+					elif a_style == " ":
+						# Gap
+						if ens == "-":
 							alignment_df.loc[i, "e_index"] = ens_index
 							alignment_df.loc[i, "u_aa_%d" % a_num] = uni
 							alignment_df.loc[i, "u_index_%d" % a_num] = uni_index
 							alignment_df.loc[i, "mismatch_%d" % a_num] = False
 							uni_index += 1
-							ens_index += 1
-						elif a_style == ".":
-							# Mismatch
+						elif uni == "-":
 							alignment_df.loc[i, "e_index"] = ens_index
-							alignment_df.loc[i, "u_aa_%d" % a_num] = uni
+							alignment_df.loc[i, "u_aa_%d" % a_num] = "-"
 							alignment_df.loc[i, "u_index_%d" % a_num] = uni_index
-							alignment_df.loc[i, "mismatch_%d" % a_num] = True
-							uni_index += 1
+							alignment_df.loc[i, "mismatch_%d" % a_num] = False
 							ens_index += 1
-						elif a_style == " ":
-							# Gap
-							if ens == "-":
-								alignment_df.loc[i, "e_index"] = ens_index
-								alignment_df.loc[i, "u_aa_%d" % a_num] = uni
-								alignment_df.loc[i, "u_index_%d" % a_num] = uni_index
-								alignment_df.loc[i, "mismatch_%d" % a_num] = False
-								uni_index += 1
-							elif uni == "-":
-								alignment_df.loc[i, "e_index"] = ens_index
-								alignment_df.loc[i, "u_aa_%d" % a_num] = "-"
-								alignment_df.loc[i, "u_index_%d" % a_num] = uni_index
-								alignment_df.loc[i, "mismatch_%d" % a_num] = False
-								ens_index += 1
 
-				alignment_df["inconsistent"] = False
-				mismatch_indices = list()
-				for i in range(len(alignments)):
-					mismatch_indices.extend(list(alignment_df[alignment_df["mismatch_%d" % a_num]].index))
-				mismatch_indices = list(set(mismatch_indices))
-				different_indices = list()
-				missing_indices = list()
-				uni_ind_cols = [col for col in alignment_df if col.startswith("u_index")]
-				uni_aa_cols = [col for col in alignment_df if col.startswith("u_aa")]
-				for ind, row in alignment_df.iterrows():
-					indices = list()
-					aas = list()
-					for col in uni_ind_cols:
-						indices.append(row[col])
-					for col in uni_aa_cols:
-						aas.append(row[col])
-						if row[col] == "-":
-							if ind not in missing_indices:
-								missing_indices.append(ind)
-					if len(list(set(indices))) > 1:
+			alignment_df["inconsistent"] = False
+			mismatch_indices = list()
+			for i in range(len(alignments)):
+				mismatch_indices.extend(list(alignment_df[alignment_df["mismatch_%d" % a_num]].index))
+			mismatch_indices = list(set(mismatch_indices))
+			different_indices = list()
+			missing_indices = list()
+			uni_ind_cols = [col for col in alignment_df if col.startswith("u_index")]
+			uni_aa_cols = [col for col in alignment_df if col.startswith("u_aa")]
+			for ind, row in alignment_df.iterrows():
+				indices = list()
+				aas = list()
+				for col in uni_ind_cols:
+					indices.append(row[col])
+				for col in uni_aa_cols:
+					aas.append(row[col])
+					if row[col] == "-":
+						if ind not in missing_indices:
+							missing_indices.append(ind)
+				if len(list(set(indices))) > 1:
+					different_indices.append(ind)
+				if len(list(set(aas))) > 1:
+					if ind not in different_indices:
 						different_indices.append(ind)
-					if len(list(set(aas))) > 1:
-						if ind not in different_indices:
-							different_indices.append(ind)
 
-				flagged_ind = list(set(mismatch_indices).union(set(different_indices).union(set(missing_indices))))
-				alignment_df.loc[flagged_ind, "inconsistent"] = True
+			flagged_ind = list(set(mismatch_indices).union(set(different_indices).union(set(missing_indices))))
+			alignment_df.loc[flagged_ind, "inconsistent"] = True
 
-				alignment_df.to_csv(path + args["OUTPUT_FILE"] + "_%s_alignment_df.csv" % uniprot, index=True)
+			alignment_df.to_csv(path + args["OUTPUT_FILE"] + "_%s_alignment_df.csv" % uniprot, index=True)
 
-				alignment_df2 = alignment_df[alignment_df.inconsistent == False]
-				seq_mapping[uniprot] = {r["e_index"]: r["u_index_0"] for i, r in alignment_df2.iterrows()}
+			alignment_df2 = alignment_df[alignment_df.inconsistent == False]
+			seq_mapping[uniprot] = {r["e_index"]: r["u_index_0"] for i, r in alignment_df2.iterrows()}
 
-			if seq_mapping:
-				return seq_mapping
-			else:
-				return None
+		if seq_mapping:
+			return seq_mapping
+		else:
+			return None
 
 
 class Variant:
@@ -918,7 +933,6 @@ class Variant:
 				   "L": "Non-Polar", "I": "Non-Polar", "M": "Non-Polar", "W": "Non-Polar", "F": "Non-Polar",
 				   "S": "Polar", "T": "Polar", "Y": "Polar", "N": "Polar", "Q": "Polar", "K": "Charged",
 				   "R": "Charged", "H": "Charged", "D": "Charged", "E": "Charged", "*": "-"}
-
 		if "allele_string" in self.vep.keys():
 			self.allele = self.vep["allele_string"]
 
@@ -987,19 +1001,20 @@ class Variant:
 					if "cds_start" in t.keys() and "cds_end" in t.keys():
 						self.cds_position = str(t["cds_start"]) + "-" + str(t["cds_end"])
 
-					self.synonymous = True if self.old_codon is not None and self.new_codon is not None and \
-											  self.old_aa is not None and self.new_aa is not None and \
-											  self.old_codon != self.new_codon and self.old_aa == self.new_aa else (
-						None if self.old_codon is None and self.new_codon is None or self.old_aa is None and
-								self.new_aa is None else False)
-					self.proline = True if self.synonymous is not None and self.synonymous == False and \
-										   self.new_aa is not None and "P" in self.new_aa.split(";") else False
-					self.stop = True if self.new_aa is not None and self.new_aa == "*" and len(self.new_aa) == 1 else (
-						True if self.new_aa is not None and "*" in self.new_aa and len(self.new_aa) > 1 else (
-							None if self.new_aa is None else False))
+					if self.cdna_change and self.protein_change:
+						self.synonymous = True if self.old_codon is not None and self.new_codon is not None and \
+												  self.old_aa is not None and self.new_aa is not None and \
+												  self.old_codon != self.new_codon and self.old_aa == self.new_aa else (
+							None if self.old_codon is None and self.new_codon is None or self.old_aa is None and
+									self.new_aa is None else False)
+						self.proline = True if self.synonymous is not None and self.synonymous == False and \
+											   self.new_aa is not None and "P" in self.new_aa.split(";") else False
+						self.stop = True if self.new_aa is not None and self.new_aa == "*" and len(
+							self.new_aa) == 1 else (
+							True if self.new_aa is not None and "*" in self.new_aa and len(self.new_aa) > 1 else False)
 
 					if "swissprot" in t.keys():
-						self.swissprot = t["swissprot"][0]
+						self.swissprot = t["swissprot"][0].split(".")[0]
 					if "polyphen_score" in t.keys():
 						self.polyphen_score = t["polyphen_score"]
 					if "polyphen_prediction" in t.keys():
@@ -1323,7 +1338,7 @@ def check_genome_for_mutation(genomic_range, direction, mutations, window_type, 
 		elif direction == "left":
 			pam_start = start - window[0]
 			pam_end = start - window[1]
-			pam_end = list(range(pam_end, pam_start))
+			pam_sites = list(range(pam_end, pam_start))
 		if mutations:
 			for loc in mutations:
 				if loc in pam_sites:
@@ -1431,7 +1446,8 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window, pa
 		lambda x: True if re.search("T{4,}", x.gRNA_Target_Sequence) is not None else False, axis=1)
 
 	edit_df["GC%"] = edit_df.apply(
-		lambda x: (x.gRNA_Target_Sequence.count("C") + x.gRNA_Target_Sequence.count("G")) * 100.0 / len(x.gRNA_Target_Sequence), axis=1)
+		lambda x: (x.gRNA_Target_Sequence.count("C") + x.gRNA_Target_Sequence.count("G")) * 100.0 / len(
+			x.gRNA_Target_Sequence), axis=1)
 
 	mutation_locations = collect_mutation_location(mutations=mutations)
 
@@ -1482,8 +1498,6 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 	if transcript_id is not None:
 		loc_edit_df = edit_df[edit_df.Transcript_ID == transcript_id]
 	else:
-		print("Ensembl object and info dict")
-		print(ensembl_object.info_dict)
 		for transcript, transcript_dict in ensembl_object.info_dict.items():
 			loc_edit_df = edit_df[edit_df.Transcript_ID == transcript]
 
@@ -1873,12 +1887,10 @@ def retrieve_vep_info(hgvs_df, ensembl_object, uniprot, transcript_id=None):
 		hgvs_json = json.dumps(hgvs_list)
 		vep_request = requests.post(server + ext, headers=headers, params=params,
 									data='{ "hgvs_notations" : %s }' % hgvs_json)
-		print(vep_request.ok)
 		if not vep_request.ok:
 			print("No response from VEP %d - %d" % (x, x + 199))
-
 		else:
-			whole_vep = vep_request.json()
+			whole_vep = json.loads(vep_request.text)
 			for hgvs in hgvs_list:
 				obj = Variant(hgvs=hgvs, gene=ensembl_object.hugo_symbol,
 							  transcript=transcript_id, strand=strand)
@@ -1975,14 +1987,16 @@ def annotate_edits(ensembl_object, vep_df, uniprot_id):
 	else:
 		uniprot = list(vep_df["swissprot_vep"].unique())[0]
 
-	ensembl_p = list(vep_df["Protein_ID"].unique())[0]
+	ensembl_p = [x for x in list(vep_df["Protein_ID"].unique()) if pandas.isna(x) is not True][0]
 	seq_mapping = ensembl_object.extract_uniprot_info(ensembl_pid=ensembl_p, uniprot=uniprot)
+
 	if seq_mapping:
 		uniprot = uniprot.split(".")[0].split("-")[0]
 		print("Uniprot ID: %s" % uniprot)
 		smap = seq_mapping[uniprot]
 		obj = Uniprot(uniprotid=uniprot)
 		obj.extract_uniprot()
+
 		uniprot_df["Protein_Position"] = None
 		for ind, row in uniprot_df.iterrows():
 			ptm, domain, c_domain = None, None, None
@@ -1991,7 +2005,9 @@ def annotate_edits(ensembl_object, vep_df, uniprot_id):
 				# First check if ensembl and uniprot sequences have same indices
 				if len(row["Protein_Position_ensembl"].split(";")) == 1:
 					position = int(row["Protein_Position_ensembl"])
-					if position in smap.keys(): uniprot_df.loc[ind, "Protein_Position"] = str(smap[position])
+					if position in smap.keys():
+						uniprot_df.loc[ind, "Protein_Position"] = str(smap[position])
+
 				elif len(row["Protein_Position_ensembl"].split(";")) > 1:
 					pos_text_list = list()
 					for position in row["Protein_Position_ensembl"].split(";"):
@@ -2002,14 +2018,16 @@ def annotate_edits(ensembl_object, vep_df, uniprot_id):
 					uniprot_df.loc[ind, "Protein_Position"] = ";".join(pos_text_list)
 
 				ptms, domains = list(), list()
-				for position in str(row["Protein_Position"]).split(";"):
-					if position is not None and position != "None" and type(position) != float:
-						if int(position) in smap.keys():
-							dom = obj.find_domain(smap[int(position)], row["Edited_AA"])
-							phos = obj.find_ptm_site("phosphorylation", smap[int(position)], row["Edited_AA"])
-							meth = obj.find_ptm_site("methylation", smap[int(position)], row["Edited_AA"])
-							ubi = obj.find_ptm_site("ubiquitination", smap[int(position)], row["Edited_AA"])
-							acet = obj.find_ptm_site("acetylation", smap[int(position)], row["Edited_AA"])
+				if uniprot_df.loc[ind, "Protein_Position"] is not None:
+					for position in str(uniprot_df.loc[ind, "Protein_Position"]).split(";"):
+						if position is not None and pandas.isna(
+								position) is False and position != "None" and position != "" and type(
+								position) != float:
+							dom = obj.find_domain(int(position), row["Edited_AA"])
+							phos = obj.find_ptm_site("phosphorylation", int(position), row["Edited_AA"])
+							meth = obj.find_ptm_site("methylation", int(position), row["Edited_AA"])
+							ubi = obj.find_ptm_site("ubiquitination", int(position), row["Edited_AA"])
+							acet = obj.find_ptm_site("acetylation", int(position), row["Edited_AA"])
 							if dom is not None: domains.append(dom + "-" + position)
 							if phos is not None: ptms.append(phos + "-" + position)
 							if meth is not None: ptms.append(meth + "-" + position)
@@ -2168,7 +2186,7 @@ def annotate_interface(annotated_edit_df, uniprot_id):
 	else:
 		group_cols = ["swissprot_vep", "Protein_Position"]
 	for group, group_df in df.groupby(group_cols):
-		if group[1] is not None and group[1] != "None" and pandas.isna(group[1]) == False:
+		if group[1] is not None and group[1] != "None" and pandas.isna(group[1]) == False and group[1] != '':
 			if group[0] in list(yulab.P1) or group[0] in list(yulab.P2):
 				all_pdb_partners, all_i3d_partners, all_eclair_partners = list(), list(), list()
 				if len(group[1].split(";")) == 1:
@@ -2363,58 +2381,91 @@ def summarise_guides(last_df):
 										   "guide_change_mutation", "mutation_on_window", "mutation_on_PAM",
 										   "# Edits/guide", "Poly_T", "GC%", "allele", "cDNA_Change",
 										   "CDS_Position", "Protein_Position_ensembl", "Protein_Position",
-										   "Protein_Change", "Edited_AA", "Edited_AA_Prop", "New_AA", "New_AA_Prop", "is_stop",
-										   "is_synonymous", "proline_addition", "variant_classification", "consequence_terms",
+										   "Protein_Change", "Edited_AA", "Edited_AA_Prop", "New_AA", "New_AA_Prop",
+										   "is_stop",
+										   "is_synonymous", "proline_addition", "variant_classification",
+										   "consequence_terms",
 										   "most_severe_consequence", "variant_biotype", "Regulatory_ID",
 										   "Motif_ID", "TFs_on_motif", "polyphen_prediction", "sift_prediction",
 										   "impact", "is_clinical", "clinical_id", "clinical_significance", "cosmic_id",
 										   "clinvar_id", "ancestral_populations", "swissprot_vep", "uniprot_provided",
 										   "Domain", "curated_Domain", "PTM", "is_disruptive_interface_EXP",
-										   "disrupted_PDB_int_partners", "disrupted_PDB_int_genes", "is_disruptive_interface_MOD",
-										   "disrupted_I3D_int_partners", "disrupted_I3D_int_genes", "is_disruptive_interface_PRED",
+										   "disrupted_PDB_int_partners", "disrupted_PDB_int_genes",
+										   "is_disruptive_interface_MOD",
+										   "disrupted_I3D_int_partners", "disrupted_I3D_int_genes",
+										   "is_disruptive_interface_PRED",
 										   "disrupted_Eclair_int_partners", "disrupted_Eclair_int_genes"])
 	# cosmic_freq
 
 	i = 0
 	for guide, guide_df in last_df.groupby(["CRISPR_PAM_Sequence"]):
-		summary_df.loc[i, "Hugo_Symbol"] = ";".join([x for x in list(guide_df.Hugo_Symbol.unique()) if x is not None])
+
+		summary_df.loc[i, "Hugo_Symbol"] = ";".join(
+			[x for x in list(guide_df.Hugo_Symbol.unique()) if x is not None and pandas.isna(x) is False])
+
 		summary_df.loc[i, "CRISPR_PAM_Sequence"] = ";".join(
-			[x for x in list(guide_df.CRISPR_PAM_Sequence.unique()) if x is not None])
+			[x for x in list(guide_df.CRISPR_PAM_Sequence.unique()) if x is not None and pandas.isna(x) is False]
+			if guide_df.CRISPR_PAM_Sequence.unique() is not None else "")
+
 		summary_df.loc[i, "CRISPR_PAM_Location"] = ";".join(
-			[x for x in list(guide_df.CRISPR_PAM_Location.unique()) if x is not None])
+			[x for x in list(guide_df.CRISPR_PAM_Location.unique()) if x is not None and pandas.isna(x) is False]
+			if guide_df.CRISPR_PAM_Location.unique() is not None else "")
+
 		summary_df.loc[i, "gRNA_Target_Sequence"] = ";".join(
-			[x for x in list(guide_df.gRNA_Target_Sequence.unique()) if x is not None])
+			[x for x in list(guide_df.gRNA_Target_Sequence.unique()) if x is not None and pandas.isna(x) is False]
+			if guide_df.gRNA_Target_Sequence.unique() is not None else "")
+
 		summary_df.loc[i, "gRNA_flanking_sequences"] = ";".join(
-			[x for x in list(guide_df.gRNA_flanking_sequences.unique()) if x is not None])
+			[x for x in list(guide_df.gRNA_flanking_sequences.unique()) if x is not None and pandas.isna(x) is False]
+			if pandas.isna(guide_df.gRNA_flanking_sequences.unique()) is False else "")
+
 		summary_df.loc[i, "gRNA_Target_Location"] = ";".join(
-			[x for x in list(guide_df.gRNA_Target_Location.unique()) if x is not None])
+			[x for x in list(guide_df.gRNA_Target_Location.unique()) if x is not None and pandas.isna(x) is False]
+			if guide_df.gRNA_Target_Location.unique() is not None else "")
+
 		summary_df.loc[i, "Edit_Location"] = ";".join(
-			[str(x) for x in list(guide_df.Edit_Location.unique()) if x is not None])
-		summary_df.loc[i, "Direction"] = ";".join([x for x in list(guide_df.Direction.unique()) if x is not None])
+			[str(x) for x in list(guide_df.Edit_Location.unique()) if x is not None and pandas.isna(x) is False]
+			if guide_df.Edit_Location.unique() is not None else "")
+
+		summary_df.loc[i, "Direction"] = ";".join(
+			[x for x in list(guide_df.Direction.unique()) if x is not None and pandas.isna(x) is False]
+			if guide_df.Direction.unique() is not None else "")
+
 		summary_df.loc[i, "Transcript_ID"] = ";".join(
-			[x for x in list(guide_df.Transcript_ID.unique()) if x is not None])
-		summary_df.loc[i, "Exon_ID"] = ";".join([x for x in list(guide_df.Exon_ID.unique()) if x is not None])
-		summary_df.loc[i, "Protein_ID"] = ";".join([x for x in list(guide_df.Protein_ID.unique()) if x is not None])
+			[x for x in list(guide_df.Transcript_ID.unique()) if x is not None and pandas.isna(x) is False]
+			if guide_df.Transcript_ID.unique() is not None else "")
+
+		summary_df.loc[i, "Exon_ID"] = ";".join(
+			[x for x in list(guide_df.Exon_ID.unique()) if
+			 x is not None and pandas.isna(x) is False] if guide_df.Exon_ID.unique() is not None else "")
+
+		summary_df.loc[i, "Protein_ID"] = ";".join(
+			[x for x in list(guide_df.Protein_ID.unique()) if x is not None and pandas.isna(x) is False]
+			if guide_df.Protein_ID.unique() is not None else "")
+
 		if guide_df[~pandas.isna(guide_df.Regulatory_ID)].Regulatory_ID.unique() is not None and type(
 				guide_df.Regulatory_ID) != float and list(
 				guide_df[~pandas.isna(guide_df.Regulatory_ID)].Regulatory_ID.unique()):
 			summary_df.loc[i, "Regulatory_ID"] = ";".join(
-				[x for x in list(guide_df.Regulatory_ID.unique()) if x is not None and type(x) != float])
+				[x for x in list(guide_df.Regulatory_ID.unique()) if x is not None and pandas.isna(x) is False])
 		else:
 			summary_df.loc[i, "Regulatory_ID"] = None
+
 		if guide_df[~pandas.isna(guide_df.Motif_ID)].Motif_ID.unique() is not None and type(
 				guide_df.Motif_ID) != float and list(guide_df[~pandas.isna(guide_df.Motif_ID)].Motif_ID.unique()):
 			summary_df.loc[i, "Motif_ID"] = ";".join(
-				[x for x in list(guide_df.Motif_ID.unique()) if x is not None and type(x) != float])
+				[x for x in list(guide_df.Motif_ID.unique()) if x is not None and pandas.isna(x) is False])
 		else:
 			summary_df.loc[i, "Motif_ID"] = None
+
 		if guide_df[~pandas.isna(guide_df.TFs_on_motif)].TFs_on_motif.unique() is not None and type(
 				guide_df.TFs_on_motif) != float and list(
 				guide_df[~pandas.isna(guide_df.TFs_on_motif)].TFs_on_motif.unique()):
 			summary_df.loc[i, "TFs_on_motif"] = ";".join(
-				[x for x in list(guide_df.TFs_on_motif.unique()) if x is not None and type(x) != float])
+				[x for x in list(guide_df.TFs_on_motif.unique()) if x is not None and pandas.isna(x) is False])
 		else:
 			summary_df.loc[i, "TFs_on_motif"] = None
+
 		summary_df.loc[i, "guide_in_CDS"] = True if True in guide_df.guide_in_CDS.unique() else False
 		summary_df.loc[i, "Edit_in_Exon"] = True if True in guide_df.Edit_in_Exon.unique() else False
 		summary_df.loc[i, "Edit_in_CDS"] = True if True in guide_df.Edit_in_CDS.unique() else False
@@ -2422,83 +2473,111 @@ def summarise_guides(last_df):
 		summary_df.loc[i, "guide_change_mutation"] = True if True in guide_df.guide_change_mutation.unique() else False
 		summary_df.loc[i, "mutation_on_window"] = True if True in guide_df.mutation_on_window.unique() else False
 		summary_df.loc[i, "mutation_on_PAM"] = True if True in guide_df.mutation_on_PAM.unique() else False
+
 		summary_df.loc[i, "# Edits/guide"] = guide_df["# Edits/guide"].unique()[0]
+
 		summary_df.loc[i, "Poly_T"] = True if True in guide_df.Poly_T.unique() else False
 		summary_df.loc[i, "GC%"] = True if True in guide_df["GC%"].unique() else False
-		summary_df.loc[i, "allele"] = ";".join(
-			[x for x in list(guide_df.allele.unique()) if x is not None and type(x) != float])
-		summary_df.loc[i, "cDNA_Change"] = ";".join(
-			[x for x in list(guide_df.cDNA_Change.unique()) if x is not None and type(x) != float])
-		summary_df.loc[i, "CDS_Position"] = ";".join(
-			[x for x in list(guide_df.CDS_Position.unique()) if x is not None and type(x) != float])
-		summary_df.loc[i, "Protein_Position"] = ";".join(
-			[str(x) for x in list(guide_df.Protein_Position.unique()) if x is not None and type(x) != float])
-		summary_df.loc[i, "Protein_Position_ensembl"] = ";".join(
-			[str(x) for x in list(guide_df.Protein_Position_ensembl.unique()) if x is not None and type(x) != float])
-		summary_df.loc[i, "Protein_Change"] = ";".join(
-			[x for x in list(guide_df.Protein_Change.unique()) if x is not None and type(x) != float])
-		summary_df.loc[i, "Edited_AA"] = ";".join(
-			[x for x in list(guide_df.Edited_AA.unique()) if x is not None and type(x) != float])
-		summary_df.loc[i, "New_AA"] = ";".join(
-			[x for x in list(guide_df.New_AA.unique()) if x is not None and type(x) != float])
-		summary_df.loc[i, "Edited_AA_Prop"] = ";".join(
-			[x for x in list(guide_df.Edited_AA_Prop.unique()) if x is not None and type(x) != float])
-		summary_df.loc[i, "New_AA_Prop"] = ";".join(
-			[x for x in list(guide_df.New_AA_Prop.unique()) if x is not None and type(x) != float])
-		summary_df.loc[i, "swissprot_vep"] = ";".join(
-			[x for x in list(guide_df.swissprot_vep.unique()) if x is not None and type(x) != float])
 
-		if guide_df.uniprot_provided.unique() is not None and type(guide_df.uniprot_provided) != float and list(guide_df.uniprot_provided.unique()):
+		summary_df.loc[i, "allele"] = ";".join(
+			[x for x in list(guide_df.allele.unique()) if x is not None and pandas.isna(x) is False])
+
+		summary_df.loc[i, "cDNA_Change"] = ";".join(
+			[x for x in list(guide_df.cDNA_Change.unique()) if x is not None and pandas.isna(x) is False])
+
+		summary_df.loc[i, "CDS_Position"] = ";".join(
+			[x for x in list(guide_df.CDS_Position.unique()) if x is not None and pandas.isna(x) is False])
+
+		summary_df.loc[i, "Protein_Position"] = ";".join(
+			[str(x) for x in list(guide_df.Protein_Position.unique()) if x is not None and pandas.isna(x) is False])
+
+		summary_df.loc[i, "Protein_Position_ensembl"] = ";".join(
+			[str(x) for x in list(guide_df.Protein_Position_ensembl.unique()) if
+			 x is not None and pandas.isna(x) is False])
+		print(list(guide_df.Protein_Change.unique()))
+		summary_df.loc[i, "Protein_Change"] = ";".join(
+			[x for x in list(guide_df.Protein_Change.unique()) if x is not None and pandas.isna(x) is False])
+
+		summary_df.loc[i, "Edited_AA"] = ";".join(
+			[x for x in list(guide_df.Edited_AA.unique()) if x is not None and pandas.isna(x) is False])
+
+		summary_df.loc[i, "New_AA"] = ";".join(
+			[x for x in list(guide_df.New_AA.unique()) if x is not None and pandas.isna(x) is False])
+
+		summary_df.loc[i, "Edited_AA_Prop"] = ";".join(
+			[x for x in list(guide_df.Edited_AA_Prop.unique()) if x is not None and pandas.isna(x) is False])
+
+		summary_df.loc[i, "New_AA_Prop"] = ";".join(
+			[x for x in list(guide_df.New_AA_Prop.unique()) if x is not None and pandas.isna(x) is False])
+
+		summary_df.loc[i, "swissprot_vep"] = ";".join(
+			[x for x in list(guide_df.swissprot_vep.unique()) if x is not None and pandas.isna(x) is False])
+
+		if guide_df.uniprot_provided.unique() is not None and pandas.isna(guide_df.uniprot_provided) is False and list(
+				guide_df.uniprot_provided.unique()):
 			summary_df.loc[i, "uniprot_provided"] = ";".join(
-				[x for x in list(guide_df.uniprot_provided.unique()) if x is not None and type(x) != float])
+				[x for x in list(guide_df.uniprot_provided.unique()) if x is not None and pandas.isna(x) is False])
 		else:
 			summary_df.loc[i, "uniprot_provided"] = None
+
 		summary_df.loc[i, "variant_classification"] = ";".join(
-			[x for x in list(guide_df.variant_classification.unique()) if x is not None and type(x) != float])
+			[x for x in list(guide_df.variant_classification.unique()) if x is not None and pandas.isna(x) is False])
+
 		summary_df.loc[i, "variant_biotype"] = ";".join(
-			[x for x in list(guide_df.variant_biotype.unique()) if x is not None and type(x) != float])
+			[x for x in list(guide_df.variant_biotype.unique()) if x is not None and pandas.isna(x) is False])
+
 		summary_df.loc[i, "consequence_terms"] = ";".join([
 			select_severe_effects(x)
 			for x in [select_severe_effects(i)
 					  for i in [rename_mutational_consequences(c)
 								for c in [x for x in list(guide_df.consequence_terms.unique()) if
 										  x is not None and pandas.isna(x) == False]]]])
+
 		summary_df.loc[i, "most_severe_consequence"] = \
 			select_severe_effects(";".join([rename_mutational_consequences(x)
 											for x in guide_df.most_severe_consequence.unique()
 											if x is not None and pandas.isna(x) == False]))
+
 		summary_df.loc[i, "is_stop"] = True if "stop codon" in guide_df.most_severe_consequence.unique() else False
 		summary_df.loc[
 			i, "is_synonymous"] = True if "synonymous" in guide_df.most_severe_consequence.unique() else False
 		summary_df.loc[i, "proline_addition"] = True if True in guide_df.proline_addition.unique() else False
+
 		if guide_df[~pandas.isna(guide_df.polyphen_prediction)].polyphen_prediction.unique() is not None and type(
-				guide_df.polyphen_prediction) != float and \
-				list(guide_df[~pandas.isna(guide_df.polyphen_prediction)].polyphen_prediction.unique()):
+				guide_df.polyphen_prediction) != float and list(
+				guide_df[~pandas.isna(guide_df.polyphen_prediction)].polyphen_prediction.unique()):
 			summary_df.loc[i, "polyphen_prediction"] = ";".join(
-				[str(x) for x in list(guide_df.polyphen_prediction.unique()) if x is not None and type(x) != float])
+				[str(x) for x in list(guide_df.polyphen_prediction.unique()) if
+				 x is not None and pandas.isna(x) is False])
 		else:
 			summary_df.loc[i, "polyphen_prediction"] = None
+
 		summary_df.loc[i, "sift_prediction"] = ";".join([x for x in list(guide_df.sift_prediction.unique()) if
 														 x is not None and pandas.isna(x) == False and type(
 															 x) != float])
+
 		summary_df.loc[i, "impact"] = ";".join([x for x in list(guide_df.impact.unique()) if
 												x is not None and pandas.isna(x) == False and type(x) != float])
+
 		summary_df.loc[i, "is_clinical"] = True if True in guide_df.is_clinical.unique() else False
+
 		if guide_df[~pandas.isna(guide_df.clinical_id)].clinical_id.unique() is not None and type(
-				guide_df.clinical_id) != float and \
-				list(guide_df[~pandas.isna(guide_df.clinical_id)].clinical_id.unique()):
+				guide_df.clinical_id) != float and list(
+				guide_df[~pandas.isna(guide_df.clinical_id)].clinical_id.unique()):
 			summary_df.loc[i, "clinical_id"] = ";".join([x for x in list(guide_df.clinical_id.unique()) if
 														 x is not None and pandas.isna(x) == False and type(
 															 x) != float])
 		else:
 			summary_df.loc[i, "clinical_id"] = None
+
 		if guide_df[~pandas.isna(guide_df.clinical_significance)].clinical_significance.unique() is not None and type(
-				guide_df.clinical_significance) != float and \
-				list(guide_df[~pandas.isna(guide_df.clinical_significance)].clinical_significance.unique()):
+				guide_df.clinical_significance) != float and list(
+				guide_df[~pandas.isna(guide_df.clinical_significance)].clinical_significance.unique()):
 			summary_df.loc[i, "clinical_significance"] = ";".join(
 				[x for x in list(guide_df.clinical_significance.unique()) if x is not None and type(x) != float])
 		else:
 			summary_df.loc[i, "clinical_significance"] = None
+
 		if guide_df[~pandas.isna(guide_df.cosmic_id)].cosmic_id.unique() is not None and type(
 				guide_df.cosmic_id) != float and \
 				list(guide_df[~pandas.isna(guide_df.cosmic_id)].cosmic_id.unique()):
@@ -2506,6 +2585,7 @@ def summarise_guides(last_df):
 				[str(x) for x in list(guide_df.cosmic_id.unique()) if x is not None and type(x) != float])
 		else:
 			summary_df.loc[i, "cosmic_id"] = None
+
 		if guide_df[~pandas.isna(guide_df.clinvar_id)].clinvar_id.unique() is not None and type(
 				guide_df.clinvar_id) != float and \
 				list(guide_df[~pandas.isna(guide_df.clinvar_id)].clinvar_id.unique()):
@@ -2799,6 +2879,11 @@ def main():
 	else:
 		ot_analysis = False
 
+	if args["TRANSCRIPT"]:
+		transcript = args["TRANSCRIPT"]
+	else:
+		transcript = None
+
 	if args["MUTATION"]:
 		mutations = [args["MUTATION"]]
 	else:
@@ -2813,7 +2898,8 @@ def main():
 The given arguments are:\nGene: %s\nAssembl: %s\nEnsembl transcript ID: %s\nUniprot ID: %s\nPAM sequence: %s\nPAM window: %s
 Protospacer length: %s\nActivity window: %s\nNucleotide change: %s>%s\nVEP and Uniprot analysis: %s\nMutation on genome: %s
 Off target analysis: %s"""
-		  % (args["GENE"], args["ASSEMBLY"], args["TRANSCRIPT"], args["UNIPROT"], args["PAMSEQ"], args["PAMWINDOW"], args["PROTOLEN"],
+		  % (args["GENE"], args["ASSEMBLY"], args["TRANSCRIPT"], args["UNIPROT"], args["PAMSEQ"], args["PAMWINDOW"],
+			 args["PROTOLEN"],
 			 args["ACTWINDOW"], args["EDIT"], args["EDIT_TO"], vep, ", ".join("" if mutations is None else mutations),
 			 ot_analysis))
 
@@ -2824,23 +2910,21 @@ Off target analysis: %s"""
     \n""")
 
 	ensembl_obj = Ensembl(hugo_symbol=args["GENE"], assembly=args["ASSEMBLY"])
+	print(ensembl_obj)
 	ensembl_obj.extract_gene_id()
 
 	if ensembl_obj.gene_id == '': sys.exit("No corresponding Ensembl Gene ID could be found!")
 
-	if mutations:
-		ensembl_obj.extract_sequence(ensembl_obj.gene_id, mutations=mutations)
-	else:
-		ensembl_obj.extract_sequence(ensembl_obj.gene_id)
+	ensembl_obj.extract_sequence(ensembl_obj.gene_id, mutations=mutations)
 
 	if ensembl_obj.gene_range[0] < ensembl_obj.gene_range[1]:
 		ensembl_obj.extract_info(chromosome=ensembl_obj.chromosome,
 								 loc_start=ensembl_obj.gene_range[0],
-								 loc_end=ensembl_obj.gene_range[1])
+								 loc_end=ensembl_obj.gene_range[1], transcript=transcript)
 	else:
 		ensembl_obj.extract_info(chromosome=ensembl_obj.chromosome,
 								 loc_start=ensembl_obj.gene_range[1],
-								 loc_end=ensembl_obj.gene_range[0])
+								 loc_end=ensembl_obj.gene_range[0], transcript=transcript)
 
 	print("""\n
 --------------------------------------------------------------
@@ -2910,7 +2994,6 @@ Off target analysis: %s"""
 									   activity_window=[int(args["ACTWINDOW"].split("-")[0]),
 														int(args["ACTWINDOW"].split("-")[1])],
 									   mutations=mutations)
-
 				if hgvs_df is not None and len(hgvs_df.index) != 0:
 					hgvs_df.to_csv(path + args["OUTPUT_FILE"] + "_hgvs_df.csv")
 					print("HGVS nomenclatures were collected.\n")
@@ -2930,7 +3013,7 @@ Off target analysis: %s"""
 		else:
 			print("VEP Data Frame was readed from %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_vep_df.csv"))
 			whole_vep_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_vep_df.csv")
-		print(whole_vep_df)
+
 		print("""\n
 --------------------------------------------------------------
 		Annotation - Protein Annotation
@@ -2948,7 +3031,7 @@ Off target analysis: %s"""
 						print("Protein Data Frame was created!")
 						protein_df.to_csv(path + args["OUTPUT_FILE"] + "_protein_df.csv", index=False)
 						print("Protein Data Frame was written in %s as %s\n" % (
-						path, args["OUTPUT_FILE"] + "_protein_df.csv\n"))
+							path, args["OUTPUT_FILE"] + "_protein_df.csv\n"))
 					else:
 						print("Protein Data Frame cannot be created because it is empty.")
 				else:
@@ -2969,7 +3052,7 @@ Off target analysis: %s"""
 					summary_df.to_csv(path + args["OUTPUT_FILE"] + "_summary_df.csv", index=False)
 					final_df = summary_df.copy()
 					print("Summary Data Frame was written in %s as %s\n\n" % (
-					path, args["OUTPUT_FILE"] + "_summary_df.csv"))
+						path, args["OUTPUT_FILE"] + "_summary_df.csv"))
 				else:
 					print("Summary Data Frame cannot be created because it is empty.")
 
@@ -3009,7 +3092,8 @@ Off target analysis: %s"""
 		except FileExistsError:
 			pass
 
-		if "Homo_sapiens.GRCh38.dna_sm.chromosome.all.final.fa.index" not in os.listdir(os.getcwd() + "/../offtargets/genome/"):
+		if "Homo_sapiens.GRCh38.dna_sm.chromosome.all.final.fa.index" not in os.listdir(
+				os.getcwd() + "/../offtargets/genome/"):
 			print("Please download genome and index it")
 
 		else:
@@ -3020,7 +3104,6 @@ Off target analysis: %s"""
 			else:
 				print("Off target information cannot be added.")
 	return True
-
 
 
 if __name__ == '__main__':
