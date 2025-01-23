@@ -278,7 +278,7 @@ class Ensembl:
 
 				info_ensembl = self.server + "/lookup/id/%s?expand=1" % x["id"]
 				info_request = requests.get(info_ensembl,
-											headers={"Content-Type": "text/x-fasta"})
+											headers={"Content-Type": "application/json"})
 
 				if info_request.json()["display_name"] == self.hugo_symbol:
 					seq_ensembl = self.server + "/sequence/id/%s?" % x["id"]
