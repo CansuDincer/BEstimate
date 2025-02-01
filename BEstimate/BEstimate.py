@@ -99,7 +99,7 @@ def take_input():
 	# OFF TARGETS
 	parser.add_argument("-ot", dest="OFF_TARGET", action="store_true",
 						help="Whether off targets will be computed or not")
-	parser.add_argument("-ot_tool", dest="OFF_TARGET_TOOL", default="WGE",
+	parser.add_argument("-ot_tool", dest="OT_TOOL", default="WGE",
 						help="Which tool you want to use, please choose WGE for CRISPR-Analyser or "
 							 "MRSFAST for vcf-specific off targets")
 	parser.add_argument("-v_ensembl", dest="VERSION", default="113",
@@ -115,7 +115,6 @@ def take_input():
 						help="The path where the mrsfast has been installed.")
 	parser.add_argument("-wge_path", dest="WGE_PATH", default=os.getcwd() + "../../CRISPR-Analyser/",
 						help="The path where the CRISPR Analyser has been installed.")
-
 
 	parsed_input = parser.parse_args()
 	input_dict = vars(parsed_input)
@@ -2041,7 +2040,7 @@ def annotate_edits(ensembl_object, vep_df, uniprot_id):
 					for position in str(uniprot_df.loc[ind, "Protein_Position"]).split(";"):
 						if position is not None and pandas.isna(
 								position) is False and position != "None" and position != "" and type(
-								position) != float:
+							position) != float:
 							dom = obj.find_domain(int(position), row["Edited_AA"])
 							phos = obj.find_ptm_site("phosphorylation", int(position), row["Edited_AA"])
 							meth = obj.find_ptm_site("methylation", int(position), row["Edited_AA"])
@@ -2464,7 +2463,7 @@ def summarise_guides(last_df):
 
 		if guide_df[~pandas.isna(guide_df.Regulatory_ID)].Regulatory_ID.unique() is not None and type(
 				guide_df.Regulatory_ID) != float and list(
-				guide_df[~pandas.isna(guide_df.Regulatory_ID)].Regulatory_ID.unique()):
+			guide_df[~pandas.isna(guide_df.Regulatory_ID)].Regulatory_ID.unique()):
 			summary_df.loc[i, "Regulatory_ID"] = ";".join(
 				[x for x in list(guide_df.Regulatory_ID.unique()) if x is not None and pandas.isna(x) is False])
 		else:
@@ -2479,7 +2478,7 @@ def summarise_guides(last_df):
 
 		if guide_df[~pandas.isna(guide_df.TFs_on_motif)].TFs_on_motif.unique() is not None and type(
 				guide_df.TFs_on_motif) != float and list(
-				guide_df[~pandas.isna(guide_df.TFs_on_motif)].TFs_on_motif.unique()):
+			guide_df[~pandas.isna(guide_df.TFs_on_motif)].TFs_on_motif.unique()):
 			summary_df.loc[i, "TFs_on_motif"] = ";".join(
 				[x for x in list(guide_df.TFs_on_motif.unique()) if x is not None and pandas.isna(x) is False])
 		else:
@@ -2564,7 +2563,7 @@ def summarise_guides(last_df):
 
 		if guide_df[~pandas.isna(guide_df.polyphen_prediction)].polyphen_prediction.unique() is not None and type(
 				guide_df.polyphen_prediction) != float and list(
-				guide_df[~pandas.isna(guide_df.polyphen_prediction)].polyphen_prediction.unique()):
+			guide_df[~pandas.isna(guide_df.polyphen_prediction)].polyphen_prediction.unique()):
 			summary_df.loc[i, "polyphen_prediction"] = ";".join(
 				[str(x) for x in list(guide_df.polyphen_prediction.unique()) if
 				 x is not None and pandas.isna(x) is False])
@@ -2582,7 +2581,7 @@ def summarise_guides(last_df):
 
 		if guide_df[~pandas.isna(guide_df.clinical_id)].clinical_id.unique() is not None and type(
 				guide_df.clinical_id) != float and list(
-				guide_df[~pandas.isna(guide_df.clinical_id)].clinical_id.unique()):
+			guide_df[~pandas.isna(guide_df.clinical_id)].clinical_id.unique()):
 			summary_df.loc[i, "clinical_id"] = ";".join([x for x in list(guide_df.clinical_id.unique()) if
 														 x is not None and pandas.isna(x) == False and type(
 															 x) != float])
@@ -2591,7 +2590,7 @@ def summarise_guides(last_df):
 
 		if guide_df[~pandas.isna(guide_df.clinical_significance)].clinical_significance.unique() is not None and type(
 				guide_df.clinical_significance) != float and list(
-				guide_df[~pandas.isna(guide_df.clinical_significance)].clinical_significance.unique()):
+			guide_df[~pandas.isna(guide_df.clinical_significance)].clinical_significance.unique()):
 			summary_df.loc[i, "clinical_significance"] = ";".join(
 				[x for x in list(guide_df.clinical_significance.unique()) if x is not None and type(x) != float])
 		else:
@@ -2666,6 +2665,7 @@ def summarise_guides(last_df):
 
 	return summary_df
 
+
 def check_genome_exist(assembly, ot_tool, ens_ver):
 	global ot_path
 	chromosomes = list(range(1, 23)) + ["X", "Y", "MT"]
@@ -2675,14 +2675,15 @@ def check_genome_exist(assembly, ot_tool, ens_ver):
 	elif assembly == "GRCh38":
 		file_main_text = "Homo_sapiens.GRCh38.dna.chromosome"
 
-	if genome not in os.listdir("%s/genome/" % ot_path):
-		print("Genome is not found, BEstimate is downloading the %s Ensembl genome - version %s\n" % (assembly, ens_ver))
+	if "%s.all.fa.gz" % file_main_text not in os.listdir("%s/genome/" % ot_path):
+		print(
+			"Genome is not found, BEstimate is downloading the %s Ensembl genome - version %s\n" % (assembly, ens_ver))
 		if "chromosome_ftps.txt" not in os.listdir("%s/genome/" % ot_path):
 			f = open("%s/genome/chromosome_ftps.txt" % ot_path, "w")
 			for chromosome in chromosomes:
 				f.writelines(
 					"url=https://ftp.ensembl.org/pub/release-%s/fasta/homo_sapiens/dna/%s.%s.fa.gz\n" % (
-					ens_ver, file_main_text, chromosome))
+						ens_ver, file_main_text, chromosome))
 				f.writelines(
 					"output=%s/genome/%s.%s.fa.gz\n" % (ot_path, file_main_text, chromosome))
 			f.close()
@@ -2691,7 +2692,7 @@ def check_genome_exist(assembly, ot_tool, ens_ver):
 					   "--config %s/genome/chromosome_ftps.txt -C -" % ot_path
 		print("Collecting the genome files from Ensembl FTP..\n")
 		_ = subprocess.Popen(curl_command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-								 text=True, shell=True)
+							 text=True, shell=True)
 		check_files = True
 		for chromosome in chromosomes:
 			if "%s.%s.fa.gz" % (file_main_text, chromosome) not in os.listdir(ot_path + "/genome/"):
@@ -2715,7 +2716,6 @@ def check_genome_exist(assembly, ot_tool, ens_ver):
 										 stderr=subprocess.PIPE,
 										 text=True, shell=True)
 				if pros2.communicate()[1] == "":
-					os.system("gunzip --keep %s/genome/%s.all.fa.gz" % (file_main_text, text_file, ot_path))
 					return True
 				else:
 					return error_message
@@ -2798,8 +2798,7 @@ def grna_fasta(crisprs, output_name, mm):
 	return grna_dict
 
 
-def index_genome_wge(ens_ver, pam_sequence):
-
+def index_genome_wge(assembly, ens_ver, pam_sequence):
 	global ot_path, wge_path
 	chromosomes = list(range(1, 23)) + ["X", "Y", "MT"]
 
@@ -2808,25 +2807,30 @@ def index_genome_wge(ens_ver, pam_sequence):
 	elif assembly == "GRCh38":
 		file_main_text = "Homo_sapiens.GRCh38.dna.chromosome"
 
-	# Gather all chromosome fasta files into cvs files
-	for chromosome in chromosomes:
-		file_name = "%s.%s.fa" % (file_main_text, chromosome)
-		os.system("gunzip --keep %s/genome/%s.gz" % (ot_path, file_name))
-		os.system("mkdir %s/genome/csv/")
-		os.system("%sCRISPR-Analyser/bin/crispr_analyser -i %s -o '%s/genome/csv/chromosome_%s.csv' -p %s -e 1"
-				  %(wge_path, file_name, ot_path, chromosome, pam_sequence))
+	if "%s.bin" % file_main_text not in os.listdir("%s/genome/" % ot_path):
+		# Gather all chromosome fasta files into cvs files
+		for chromosome in chromosomes:
+			if "chromosome_%s.csv" % chromosome not in os.listdir("%s/genome/csv/" % ot_path):
+				file_name = "%s.%s.fa" % (file_main_text, chromosome)
+				if file_name not in os.listdir("%s/genome/" % ot_path):
+					os.system("gunzip --keep %s/genome/%s.gz" % (ot_path, file_name))
 
-	# Index genome
-	chromosome_input_text_list = list()
-	for chromosome in chromosomes:
-		chromosome_input_text_list.append("-i csv/chromosome_%s.csv " % chromosome)
-	chromosome_input_text = " ".join(chromosome_input_text_list)
+			csv_command = "%sCRISPR-Analyser/bin/crispr_analyser gather -i %s -o '%s/genome/csv/chromosome_%s.csv' -p %s -e 1" % (
+			wge_path, file_name, ot_path, chromosome, pam_sequence)
+			_ = subprocess.Popen(csv_command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+								 text=True, shell=True)
 
-	os.system("%sCRISPR-Analyser/bin/crispr_analyser index -a '%s' -s 'Human' -e '1' %s "
-			  "-o '%s/genome/%s.bin'"
-			  % (wge_path, ens_ver, chromosome_input_text, ot_path, file_main_text))
+		# Index genome
+		chromosome_input_text_list = list()
+		for chromosome in chromosomes:
+			chromosome_input_text_list.append("-i %s/genome/csv/chromosome_%s.csv " % (ot_path, chromosome))
+		chromosome_input_text = " ".join(chromosome_input_text_list)
 
-	if "%s.bin" in os.listdir("%s/genome/" % ot_path):
+		os.system("%sCRISPR-Analyser/bin/crispr_analyser index -a '%s' -s 'Human' -e '1' %s "
+				  "-o '%s/genome/%s.bin'"
+				  % (wge_path, ens_ver, chromosome_input_text, ot_path, file_main_text))
+
+	if "%s.bin" % file_main_text in os.listdir("%s/genome/" % ot_path):
 		return True
 	else:
 		return False
@@ -2842,7 +2846,7 @@ def run_offtargets(genome, df, output_path, output_name, ot_tool, mm, ot_vcf, th
 	:param mm: Number of max mismatch allowed
 	:return:
 	"""
-	global ot_path, mrsfast_path
+	global ot_path, mrsfast_path, wge_path
 
 	if ot_tool == "MRSFAST":
 		if "%s_alignment.sam" % output_name not in os.listdir(ot_path + "/sam_files/"):
@@ -2866,13 +2870,15 @@ def run_offtargets(genome, df, output_path, output_name, ot_tool, mm, ot_vcf, th
 			else:
 				if "%s.all.fa.vcf.index" % genome not in os.listdir("%s/genome/" % ot_path):
 					print("Indexing the genome with VCF file..")
-					os.system("mrsfast_path%ssnp_indexer '%s' %s/genome/%s.all.fa.vcf.index" % (mrsfast_path, ot_vcf, ot_path, genome))
+					os.system("mrsfast_path%ssnp_indexer '%s' %s/genome/%s.all.fa.vcf.index" % (
+					mrsfast_path, ot_vcf, ot_path, genome))
 
 				print("\ngRNA alignment on the genome with VCF..\n")
 				os.system(
 					"%smrsfast --search %s/genome/%s.all.fa --seq %s/fasta/%s_fasta.fa --threads %s -e 0 --snp %s/genome/%s.all.fa.vcf.index"
 					"-o %s/sam_files/%s_alignment.sam --disable-nohits"
-					% (mrsfast_path, ot_path, genome, ot_path, output_name, threads_num, ot_path, genome, ot_path, output_name))
+					% (mrsfast_path, ot_path, genome, ot_path, output_name, threads_num, ot_path, genome, ot_path,
+					   output_name))
 				print("\ngRNA alignment on the genome with VCF was finished.\n")
 
 		if "%s_alignment.sam" % output_name in os.listdir(ot_path + "/sam_files/"):
@@ -2882,9 +2888,14 @@ def run_offtargets(genome, df, output_path, output_name, ot_tool, mm, ot_vcf, th
 			return False
 
 	elif ot_tool == "WGE":
-		os.system("python3 run_CRISPR_Analyser.py -c '%s' -b '%s' -o '%s'"
-				  %(output_path + output_name + "_edit_df.csv", genome + ".bin",
-					ot_path +  "/wge_files/" + output_name + "_wge_output.csv" ))
+		print("python3 run_CRISPR_Analyser.py -c '%s' -b '%s' -o '%s' -p '%s' -ot_p '%s' -g '%s'"
+			  % (output_path + output_name + "_edit_df.csv", genome + ".bin",
+				 ot_path + "/wge_files/" + output_name + "_wge_output.csv",
+				 wge_path, ot_path, genome))
+		os.system("python3 run_CRISPR_Analyser.py -c '%s' -b '%s' -o '%s' -p '%s' -ot_p '%s' -g '%s'"
+				  % (output_path + output_name + "_edit_df.csv", genome + ".bin",
+					 ot_path + "/wge_files/" + output_name + "_wge_output.csv",
+					 wge_path, ot_path, genome))
 
 		if "%s_wge_output.csv" % output_name in os.listdir(ot_path + "/wge_files/"):
 			return True
@@ -2982,7 +2993,8 @@ def add_offtargets(genome, output_name, output_path, df, mm, threads_num, ot_vcf
 	elif ot_tool == "WGE" and ot:
 		ot_df = pandas.read_csv(ot_path + "/wge_files/%s_wge_output.csv" % output_name)
 		if len(ot_df.index) > 0:
-			ot_df = ot_df[[col for col in ot_df.columns if col not in ["CRISPR_sequence", "Chromosome", "Start", "Strand"]]]
+			ot_df = ot_df[
+				[col for col in ot_df.columns if col not in ["CRISPR_sequence", "Chromosome", "Start", "Strand"]]]
 			ot_df["exact"] = ot_df.apply(lambda x: x.Off_target_summary.split(", ")[0].split(": ")[1], axis=1)
 			ot_df["mm1"] = ot_df.apply(lambda x: x.Off_target_summary.split(", ")[1].split(": ")[1], axis=1)
 			ot_df["mm2"] = ot_df.apply(lambda x: x.Off_target_summary.split(", ")[2].split(": ")[1], axis=1)
@@ -2993,8 +3005,6 @@ def add_offtargets(genome, output_name, output_path, df, mm, threads_num, ot_vcf
 			return False
 	else:
 		return False
-
-
 
 
 ###########################################################################################
@@ -3239,6 +3249,7 @@ Off target analysis: %s"""
 			os.mkdir(os.getcwd() + "/../offtargets/fasta_dict/")
 			os.mkdir(os.getcwd() + "/../offtargets/of_files/")
 			os.mkdir(os.getcwd() + "/../offtargets/wge_files/")
+			os.mkdir(os.getcwd() + "/../offtargets/genome/cvs/")
 
 		except FileExistsError:
 			pass
@@ -3246,14 +3257,19 @@ Off target analysis: %s"""
 		if args["OT_TOOL"] == "MRSFAST":
 			if "%s.all.fa.gz" % args["GENOME"] not in os.listdir(
 					os.getcwd() + "/../offtargets/genome/"):
-
 				_ = check_genome_exist(assembly=args["ASSEMBLY"], ot_tool=args["OT_TOOL"], ens_ver=args["VERSION"])
 
-			is_nes_data = True if "%s.all.fa" % args["GENOME"] not \
+			is_nes_data = True if "%s.all.fa.gz" % args["GENOME"] \
 								  in os.listdir(os.getcwd() + "/../offtargets/genome/") else False
 
+			if "%s.all.fa" % args["GENOME"] not in os.listdir("%s/genome" % ot_path):
+				os.system("gunzip --keep %s/genome/%s.all.fa.gz" % (args["GENOME"], text_file, ot_path))
+
 		elif args["OT_TOOL"] == "WGE":
-			is_nes_data = index_genome_wge(ens_ver=args["VERSION"], pam_sequence=args["PAMSEQ"])
+			_ = check_genome_exist(assembly=args["ASSEMBLY"], ot_tool=args["OT_TOOL"], ens_ver=args["VERSION"])
+
+			is_nes_data = index_genome_wge(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"],
+										   pam_sequence=args["PAMSEQ"])
 
 		if is_nes_data:
 			bestimate_ot_df = add_offtargets(genome=args["GENOME"], output_name=args["OUTPUT_FILE"],
@@ -3284,9 +3300,9 @@ if __name__ == '__main__':
 
 	wge_path = ""
 	if args["WGE_PATH"][-1] == "/":
-		path = args["WGE_PATH"]
+		wge_path = args["WGE_PATH"]
 	else:
-		path = args["WGE_PATH"] + "/"
+		wge_path = args["WGE_PATH"] + "/"
 
 	mrsfast_path = ""
 	if args["MRSFAST_PATH"][-1] == "/":
@@ -3307,7 +3323,7 @@ if __name__ == '__main__':
 	main()
 
 	print("""\n
-	--------------------------------------------------------------
-		The BEstimate analysis successfully finished!
-	--------------------------------------------------------------
+--------------------------------------------------------------
+	The BEstimate analysis successfully finished!
+--------------------------------------------------------------
 	\n""")
