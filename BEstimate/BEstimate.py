@@ -1689,7 +1689,6 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 					row_dicts.append(d)
 
 		elif direction == "right":
-
 			for grna, grna_df in direction_df.groupby(["gRNA_Target_Sequence"]):
 
 				total_edit = len(set(list(grna_df["Edit_Location"].values)))
