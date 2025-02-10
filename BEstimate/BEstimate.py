@@ -15,6 +15,7 @@ from Bio.pairwise2 import format_alignment
 
 from BEstimate.BEstimate import x_genome
 
+
 # -----------------------------------------------------------------------------------------#
 # Take inputs
 
