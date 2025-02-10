@@ -8,11 +8,12 @@
 # -----------------------------------------------------------------------------------------#
 
 # Import necessary packages
-import os, sys, pandas, re, argparse, requests, json, itertools, pickle, time, numpy, subprocess, gzip
+import os, sys, pandas, re, argparse, requests, json, itertools, pickle, time, numpy, subprocess, gzip, time
 from Bio import SeqIO
 from Bio import pairwise2
 from Bio.pairwise2 import format_alignment
 
+from BEstimate.BEstimate import x_genome
 
 # -----------------------------------------------------------------------------------------#
 # Take inputs
@@ -99,20 +100,8 @@ def take_input():
 	# OFF TARGETS
 	parser.add_argument("-ot", dest="OFF_TARGET", action="store_true",
 						help="Whether off targets will be computed or not")
-	parser.add_argument("-ot_tool", dest="OT_TOOL", default="WGE",
-						help="Which tool you want to use, please choose WGE for CRISPR-Analyser or "
-							 "MRSFAST for vcf-specific off targets")
-	parser.add_argument("-v_ensembl", dest="VERSION", default="113",
-						help="The ensembl version in which genome will be retrieved "
-							 "(if the assembly is GRCh37 then please use <=75)")
-	parser.add_argument("-mm", dest="MISMATCH", default=4,
-						help="(If -ot provided) number of maximum mismatches allowed in off targets")
-	parser.add_argument("-ot_vcf", dest="OT_VCF",
-						help="The vcf file with its path")
 	parser.add_argument("-genome", dest="GENOME", default="Homo_sapiens.GRCh38.dna.chromosome",
 						help="(If -ot provided) name of the genome file")
-	parser.add_argument("-mrsfast_path", dest="MRSFAST_PATH", default=os.getcwd() + "../../mrsfast/",
-						help="The path where the mrsfast has been installed.")
 	parser.add_argument("-wge_path", dest="WGE_PATH", default=os.getcwd() + "../../CRISPR-Analyser/",
 						help="The path where the CRISPR Analyser has been installed.")
 
@@ -1689,6 +1678,7 @@ def extract_hgvs(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 					row_dicts.append(d)
 
 		elif direction == "right":
+
 			for grna, grna_df in direction_df.groupby(["gRNA_Target_Sequence"]):
 
 				total_edit = len(set(list(grna_df["Edit_Location"].values)))
@@ -2665,332 +2655,43 @@ def summarise_guides(last_df):
 	return summary_df
 
 
-def check_genome_exist(assembly, ot_tool, ens_ver):
-	global ot_path
-	chromosomes = list(range(1, 23)) + ["X", "Y", "MT"]
-
-	if assembly == "GRCh37":
-		file_main_text = "Homo_sapiens.GRCh37.%s.dna.chromosome" % ens_ver
-	elif assembly == "GRCh38":
-		file_main_text = "Homo_sapiens.GRCh38.dna.chromosome"
-
-	if "%s.all.fa.gz" % file_main_text not in os.listdir("%s/genome/" % ot_path):
-		print(
-			"Genome is not found, BEstimate is downloading the %s Ensembl genome - version %s\n" % (assembly, ens_ver))
-		if "chromosome_ftps.txt" not in os.listdir("%s/genome/" % ot_path):
-			f = open("%s/genome/chromosome_ftps.txt" % ot_path, "w")
-			for chromosome in chromosomes:
-				f.writelines(
-					"url=https://ftp.ensembl.org/pub/release-%s/fasta/homo_sapiens/dna/%s.%s.fa.gz\n" % (
-						ens_ver, file_main_text, chromosome))
-				f.writelines(
-					"output=%s/genome/%s.%s.fa.gz\n" % (ot_path, file_main_text, chromosome))
-			f.close()
-
-		curl_command = "curl --parallel --parallel-immediate --parallel-max 25 --fail-with-body --retry 5 " \
-					   "--config %s/genome/chromosome_ftps.txt -C -" % ot_path
-		print("Collecting the genome files from Ensembl FTP..\n")
-		_ = subprocess.Popen(curl_command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-							 text=True, shell=True)
-		check_files = True
-		for chromosome in chromosomes:
-			if "%s.%s.fa.gz" % (file_main_text, chromosome) not in os.listdir(ot_path + "/genome/"):
-				check_files = False
-
-		error_message = "Error in downloading genome, please manually downloading all chromosomes from:" \
-						"https://ftp.ensembl.org/pub/release-%s/fasta/homo_sapiens/dna/ named as " \
-						"Homo_sapiens.GRCh38.dna.chromosome.<chromosome>.fa.gz if the assembl is GRCh38, otherwise" \
-						"Homo_sapiens.GRCh37.<version>.dna.chromosome.<chromosome>.fa.gz"
-		if check_files:
-			if ot_tool == "WGE":
-				return True
-			elif ot_tool == "MRSFAST":
-				list_files = list()
-				for chromosome in chromosomes:
-					list_files.append(
-						"%s/genome/%s.%s.fa.gz" % (file_main_text, ot_path, chromosome))
-				text_file = " ".join(list_files)
-				cat_command = "cat %s > %s/genome/%s.all.fa.gz" % (file_main_text, text_file, ot_path)
-				pros2 = subprocess.Popen(cat_command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-										 stderr=subprocess.PIPE,
-										 text=True, shell=True)
-				if pros2.communicate()[1] == "":
-					return True
-				else:
-					return error_message
-		else:
-			return error_message
-
-
-def mm_combination_seq(mm, seq):
-	"""
-	Mismatched version of gRNAs
-	:param mm: The max number of mismatches wanted
-	:param seq: gRNA sequencd
-	:return: list of potentially mutated sequences of the related gRNA
-	"""
-	nuc_dict = {"A": ["T", "C", "G"],
-				"T": ["A", "C", "G"],
-				"C": ["A", "T", "G"],
-				"G": ["A", "T", "C"]}
-	pam = seq[-3:]
-	seq = seq[:-3]
-	if mm == 0:
-		return seq
-	else:
-		ind_perm = list(itertools.permutations(list(range(len(seq))), mm))
-		all_seqs = list()
-		for pos in ind_perm:
-			new_seq = []
-			for ind in range(len(seq)):
-				if ind not in pos:
-					new_seq.append(list(seq[ind]))
-				else:
-					new_seq.append(list(nuc_dict[seq[ind]]))
-			all_seqs.append(new_seq)
-
-		all_mm_guides = list()
-		for mm_seq in all_seqs:
-			for s in list(itertools.product(*mm_seq)):
-				all_mm_guides.append("".join(s) + pam)
-
-		return list(set(all_mm_guides))
-
-
-def grna_fasta(crisprs, output_name, mm):
-	"""
-	Create fats file
-	:param crisprs: the list of gRNAs
-	:param output_name: the result file
-	:param mm: The max number of mismatches wanted
-	:return:
-	"""
-	global ot_path
-
-	if "%s_dict.p" % output_name not in os.listdir(ot_path + "/fasta_dict/"):
-		mm = int(mm)
-		f = open(ot_path + "/fasta/%s_fasta.fa" % output_name, "w")
-		grna_dict = dict()
-		count = 1
-		for i in crisprs:
-			seq = i[0]
-			direction = i[1]
-			f.write(">gRNA-%d-%s\n%s\n" % (count, direction, seq))
-			if "gRNA-%d-%s" % (count, direction) not in grna_dict.keys():
-				grna_dict["gRNA-%d-%s" % (count, direction)] = {"seq": seq}
-			for k in range(1, mm + 1):
-				mm_count = 1
-				mm_seqs = mm_combination_seq(mm=k, seq=seq)
-				for m_seq in mm_seqs:
-					if len(m_seq) < 10:
-						print(m_seq)
-					f.write(">gRNA-%d-%s:mm%d:count%s\n%s\n" % (count, direction, k, mm_count, m_seq))
-					grna_dict["gRNA-%d-%s" % (count, direction)]["mm%d:mm_count%d" % (k, mm_count)] = m_seq
-					mm_count += 1
-			count += 1
-
-		f.close()
-		pickle.dump(grna_dict, open(ot_path + "/fasta_dict/%s_dict.p" % output_name, "wb"))
-
-	else:
-		grna_dict = pickle.load(open(ot_path + "/fasta_dict/%s_dict.p" % output_name, "rb"))
-	return grna_dict
-
-
-def index_genome_wge(assembly, ens_ver, pam_sequence):
-	global ot_path, wge_path
-	chromosomes = list(range(1, 23)) + ["X", "Y", "MT"]
-
-	if assembly == "GRCh37":
-		file_main_text = "Homo_sapiens.GRCh37.%s.dna.chromosome" % ens_ver
-	elif assembly == "GRCh38":
-		file_main_text = "Homo_sapiens.GRCh38.dna.chromosome"
-
-	if "%s.bin" % file_main_text not in os.listdir("%s/genome/" % ot_path):
-		# Gather all chromosome fasta files into cvs files
-		for chromosome in chromosomes:
-			if "chromosome_%s.csv" % chromosome not in os.listdir("%s/genome/csv/" % ot_path):
-				file_name = "%s.%s.fa" % (file_main_text, chromosome)
-				if file_name not in os.listdir("%s/genome/" % ot_path):
-					os.system("gunzip --keep %s/genome/%s.gz" % (ot_path, file_name))
-
-			csv_command = "%sCRISPR-Analyser/bin/crispr_analyser gather -i %s -o '%s/genome/csv/chromosome_%s.csv' -p %s -e 1" % (
-			wge_path, file_name, ot_path, chromosome, pam_sequence)
-			_ = subprocess.Popen(csv_command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-								 text=True, shell=True)
-
-		# Index genome
-		chromosome_input_text_list = list()
-		for chromosome in chromosomes:
-			chromosome_input_text_list.append("-i %s/genome/csv/chromosome_%s.csv " % (ot_path, chromosome))
-		chromosome_input_text = " ".join(chromosome_input_text_list)
-
-		os.system("%sCRISPR-Analyser/bin/crispr_analyser index -a '%s' -s 'Human' -e '1' %s "
-				  "-o '%s/genome/%s.bin'"
-				  % (wge_path, ens_ver, chromosome_input_text, ot_path, file_main_text))
-
-	if "%s.bin" % file_main_text in os.listdir("%s/genome/" % ot_path):
-		return True
-	else:
-		return False
-
-
-def run_offtargets(genome, df, output_path, output_name, ot_tool, mm, ot_vcf, threads_num):
+def run_offtargets(genome, file_name):
 	"""
 	Run mrsfast from python with gRNAs created with BEstimate
 	:param genome: fasta file of the genome
-	:param df: BEstimate final data frame
-	:param output_name: Name of the output file initial
-	:param mm: Number of max mismatch allowed
-	:param mm: Number of max mismatch allowed
+	:param file_name: Name of the output file
 	:return:
 	"""
-	global ot_path, mrsfast_path, wge_path
+	global ot_path, wge_path
 
-	if ot_tool == "MRSFAST":
-		if "%s_alignment.sam" % output_name not in os.listdir(ot_path + "/sam_files/"):
-			# Create fasta file
-			print("Writing Fasta file..")
-			if "%s_fasta.fa" % output_name not in os.listdir(ot_path + "/fasta/"):
-				crisprs = df[["CRISPR_PAM_Sequence", "Direction"]].values
-				grna_fasta(crisprs=crisprs, output_name=output_name, mm=mm)
-				print("Fasta file created.")
+	print("python3 x_crispranalyser.py -c '%s' -b '%s' -o '%s' -p '%s'"
+		  % (path + file_name, ot_path + "/genome/" + genome + ".bin",
+			 ot_path + "/wge_files/" + file_name, wge_path))
 
-			if ot_vcf is False:
-				if "%s.all.fa.index" % genome not in os.listdir("%s/genome/" % ot_path):
-					print("Indexing the genome..")
-					os.system("mrsfast --index %s/genome/%s.all.fa" % (ot_path, genome))
+	os.system("python3 x_crispranalyser.py -c '%s' -b '%s' -o '%s' -p '%s'"
+			  % (path + file_name, ot_path + "/genome/" + genome + ".bin",
+				 ot_path + "/wge_files/" + file_name, wge_path))
 
-				print("\ngRNA alignment on the genome..\n")
-				os.system(
-					"%smrsfast --search %s/genome/%s.all.fa --seq %s/fasta/%s_fasta.fa --threads %s -e 0 -o %s/sam_files/%s_alignment.sam --disable-nohits"
-					% (mrsfast_path, ot_path, genome, ot_path, output_name, threads_num, ot_path, output_name))
-				print("\ngRNA alignment on the genome was finished.\n")
-			else:
-				if "%s.all.fa.vcf.index" % genome not in os.listdir("%s/genome/" % ot_path):
-					print("Indexing the genome with VCF file..")
-					os.system("mrsfast_path%ssnp_indexer '%s' %s/genome/%s.all.fa.vcf.index" % (
-					mrsfast_path, ot_vcf, ot_path, genome))
-
-				print("\ngRNA alignment on the genome with VCF..\n")
-				os.system(
-					"%smrsfast --search %s/genome/%s.all.fa --seq %s/fasta/%s_fasta.fa --threads %s -e 0 --snp %s/genome/%s.all.fa.vcf.index"
-					"-o %s/sam_files/%s_alignment.sam --disable-nohits"
-					% (mrsfast_path, ot_path, genome, ot_path, output_name, threads_num, ot_path, genome, ot_path,
-					   output_name))
-				print("\ngRNA alignment on the genome with VCF was finished.\n")
-
-		if "%s_alignment.sam" % output_name in os.listdir(ot_path + "/sam_files/"):
-			return True
-		else:
-			print("No alignment - off target")
-			return False
-
-	elif ot_tool == "WGE":
-		print("python3 run_CRISPR_Analyser.py -c '%s' -b '%s' -o '%s' -p '%s' -ot_p '%s' -g '%s'"
-			  % (output_path + output_name + "_edit_df.csv", genome + ".bin",
-				 ot_path + "/wge_files/" + output_name + "_wge_output.csv",
-				 wge_path, ot_path, genome))
-		os.system("python3 run_CRISPR_Analyser.py -c '%s' -b '%s' -o '%s' -p '%s' -ot_p '%s' -g '%s'"
-				  % (output_path + output_name + "_edit_df.csv", genome + ".bin",
-					 ot_path + "/wge_files/" + output_name + "_wge_output.csv",
-					 wge_path, ot_path, genome))
-
-		if "%s_wge_output.csv" % output_name in os.listdir(ot_path + "/wge_files/"):
-			return True
-		else:
-			print("No alignment - off target")
-			return False
-
-
-def read_sam(output_name, crisprs, mm):
-	"""
-	Reading the output of msrfast algorithm
-	:param output_name: Name of the output file initial
-	:param crisprs: List of gRNA sequence with their directionality
-	:param mm: Number of max mismatch allowed
-	:return:
-	"""
-	if "%s_ots.csv" % output_name not in os.listdir(ot_path + "/ot_files/"):
-		ot_df = pandas.DataFrame(columns=["guide_flag", "guide_seq", "direction", "mm", "chr", "start", "mm_count"])
-		grna_dict = grna_fasta(crisprs, output_name, mm)
-		f = open(ot_path + "/sam_files/" + output_name + "_alignment.sam", "r")
-		lines = f.readlines()
-		ind_count = 0
-		for line in lines:
-			if line[:4] == "gRNA":
-				l = line.split("\t")
-				if len(l[0].split(":")) == 1:
-					guide_flag = l[0]
-					mm = "0"
-					mm_count = None
-				else:
-					guide_flag = l[0].split(":")[0]
-					mm = l[0].split(":")[1][2:]
-					mm_count = l[0].split(":")[2][5:]
-				ot_df.loc[ind_count, "guide_flag"] = guide_flag
-				ot_df.loc[ind_count, "guide_seq"] = l[9]
-				ot_df.loc[ind_count, "direction"] = guide_flag.split("-")[-1]
-				ot_df.loc[ind_count, "mm"] = mm
-				ot_df.loc[ind_count, "chr"] = l[2]
-				ot_df.loc[ind_count, "start"] = l[3]
-				ot_df.loc[ind_count, "mm_count"] = mm_count
-				ind_count += 1
-
-		f.close()
-		mm_col = ["mm%d" % (i + 1) for i in range(int(mm))]
-		df_col = ["CRISPR_PAM_Sequence", "exact"] + mm_col
-		summary_ot_df = pandas.DataFrame(columns=df_col, index=list(ot_df.groupby(["guide_flag"]).groups.keys()))
-
-		for g, g_df in ot_df.groupby(["guide_flag"]):
-			exact = g_df.groupby(["mm"]).size().loc["0"]
-			# Alignment sequence might be different strand but we want the sequence with PAM
-			# Retrieve sequence of the actual gRNA
-			grna_seq = grna_dict[g_df[g_df.mm == "0"]["guide_flag"].unique()[0]]["seq"]
-			summary_ot_df.loc[g, "CRISPR_PAM_Sequence"] = grna_seq
-			summary_ot_df.loc[g, "exact"] = exact
-			for i in range(1, int(mm) + 1):
-				if str(i) in g_df.mm.unique():
-					summary_ot_df.loc[g, "mm%d" % i] = g_df.groupby(["mm"]).size().loc[str(i)]
-				else:
-					summary_ot_df.loc[g, "mm%d" % i] = 0
-
-		summary_ot_df = summary_ot_df.reset_index()
-		changed_df_col = ["guide_flag", "CRISPR_PAM_Sequence", "exact"] + mm_col
-		summary_ot_df.columns = changed_df_col
-
-		summary_ot_df.to_csv(ot_path + "/ot_files/%s_ots.csv" % output_name)
+	if "%s_wge_output.csv" % file_name.split("_")[:-2] in os.listdir(ot_path + "/wge_files/"):
+		return True
 	else:
-		summary_ot_df = pandas.read_csv(ot_path + "/ot_files/%s_ots.csv" % output_name)
+		print("No alignment - off target")
+		return False
 
-	return summary_ot_df
 
-
-def add_offtargets(genome, output_name, output_path, df, mm, threads_num, ot_vcf, ot_tool):
+def add_offtargets(genome, file_name):
 	"""
 	Adding off targets information on BEstimate results
 	:param genome: fasta file of the genome
-	:param output_name: Name of the output file initial
-	:param df: BEstimate final data frame
-	:param mm: Number of max mismatch allowed
-	:param threads_num: Number of threads will be used for alignment
+	:param file_name: Name of the output file
 	:return:
 	"""
 	global ot_path
 
-	ot = run_offtargets(genome=genome, df=df, output_path=output_path, output_name=output_name,
-						ot_tool=ot_tool, mm=mm, ot_vcf=ot_vcf, threads_num=threads_num)
+	ot = run_offtargets(genome=genome, file_name=file_name)
 
-	if ot_tool == "MRSFAST" and ot:
-		ot_df = read_sam(output_name=output_name, crisprs=crisprs, mm=mm)
-		if len(ot_df.index) > 0:
-			df_final = pandas.merge(df, ot_df, how="outer", on=["CRISPR_PAM_Sequence"])
-			return df_final
-		else:
-			return False
-
-	elif ot_tool == "WGE" and ot:
-		ot_df = pandas.read_csv(ot_path + "/wge_files/%s_wge_output.csv" % output_name)
+	if ot:
+		ot_df = pandas.read_csv(ot_path + "/wge_files/%s_wge_output.csv" % file_name.split("_")[:-2])
 		if len(ot_df.index) > 0:
 			ot_df = ot_df[
 				[col for col in ot_df.columns if col not in ["CRISPR_sequence", "Chromosome", "Start", "Strand"]]]
@@ -3095,7 +2796,7 @@ Off target analysis: %s"""
 	else:
 		path = args["OUTPUT_PATH"] + "/"
 
-	final_df = None
+	file_name = args["OUTPUT_FILE"] + "_edit_df.csv"
 
 	if args["OUTPUT_FILE"] + "_crispr_df.csv" not in os.listdir(path):
 		crispr_df = extract_grna_sites(hugo_symbol=args["GENE"], searched_nucleotide=args["EDIT"],
@@ -3144,6 +2845,7 @@ Off target analysis: %s"""
 		Annotation - VEP Annotation
 --------------------------------------------------------------
         \n""")
+		file_name = args["OUTPUT_FILE"] + "_summary_df.csv"
 		if args["OUTPUT_FILE"] + "_vep_df.csv" not in os.listdir(path):
 			if args["OUTPUT_FILE"] + "_hgvs_df.csv" not in os.listdir(path):
 				hgvs_df = extract_hgvs(edit_df=edit_df, ensembl_object=ensembl_obj,
@@ -3218,12 +2920,8 @@ Off target analysis: %s"""
 				print(
 					"Summary Data Frame was readed from %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_summary_df.csv"))
 				summary_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_summary_df.csv")
-				final_df = summary_df.copy()
 		else:
 			print("Protein Data Frame cannot be created because it is empty.")
-
-	else:
-		final_df = edit_df.copy()
 
 	if args["OFF_TARGET"]:
 		print("""\n
@@ -3243,43 +2941,23 @@ Off target analysis: %s"""
 			pass
 
 		try:
-			os.mkdir(os.getcwd() + "/../offtargets/sam_files/")
-			os.mkdir(os.getcwd() + "/../offtargets/fasta/")
-			os.mkdir(os.getcwd() + "/../offtargets/fasta_dict/")
-			os.mkdir(os.getcwd() + "/../offtargets/of_files/")
 			os.mkdir(os.getcwd() + "/../offtargets/wge_files/")
 			os.mkdir(os.getcwd() + "/../offtargets/genome/cvs/")
 
 		except FileExistsError:
 			pass
 
-		if args["OT_TOOL"] == "MRSFAST":
-			if "%s.all.fa.gz" % args["GENOME"] not in os.listdir(
-					os.getcwd() + "/../offtargets/genome/"):
-				_ = check_genome_exist(assembly=args["ASSEMBLY"], ot_tool=args["OT_TOOL"], ens_ver=args["VERSION"])
-
-			is_nes_data = True if "%s.all.fa.gz" % args["GENOME"] \
-								  in os.listdir(os.getcwd() + "/../offtargets/genome/") else False
-
-			if "%s.all.fa" % args["GENOME"] not in os.listdir("%s/genome" % ot_path):
-				os.system("gunzip --keep %s/genome/%s.all.fa.gz" % (args["GENOME"], text_file, ot_path))
-
-		elif args["OT_TOOL"] == "WGE":
-			_ = check_genome_exist(assembly=args["ASSEMBLY"], ot_tool=args["OT_TOOL"], ens_ver=args["VERSION"])
-
-			is_nes_data = index_genome_wge(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"],
-										   pam_sequence=args["PAMSEQ"])
+		is_nes_data = x_genome.main()
 
 		if is_nes_data:
-			bestimate_ot_df = add_offtargets(genome=args["GENOME"], output_name=args["OUTPUT_FILE"],
-											 output_path=args["OUTPUT_FILE"], df=final_df, mm=mm,
-											 ot_vcf=args["OT_VCF"], ot_tool=args["OT_TOOL"], threads_num=4)
+			bestimate_ot_df = add_offtargets(genome=args["GENOME"], file_name=file_name)
 
 			if bestimate_ot_df is not False:
 				bestimate_ot_df.to_csv(path + args["OUTPUT_FILE"] + "_ot_annotated_summary_df.csv", index=False)
+				return True
 			else:
 				print("Off target information cannot be added.")
-	return True
+
 
 
 if __name__ == '__main__':
@@ -3305,9 +2983,9 @@ if __name__ == '__main__':
 
 	mrsfast_path = ""
 	if args["MRSFAST_PATH"][-1] == "/":
-		path = args["MRSFAST_PATH"]
+		mrsfast_path = args["MRSFAST_PATH"]
 	else:
-		path = args["MRSFAST_PATH"] + "/"
+		mrsfast_path = args["MRSFAST_PATH"] + "/"
 
 	# -----------------------------------------------------------------------------------------#
 	# Data w/out API opportunity
