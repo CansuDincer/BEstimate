@@ -12,7 +12,7 @@ import os, sys, pandas, re, argparse, requests, json, itertools, pickle, time, n
 from Bio import SeqIO
 from Bio import pairwise2
 from Bio.pairwise2 import format_alignment
-
+import numpy as np
 from BEstimate.BEstimate import x_genome
 
 
@@ -2424,7 +2424,7 @@ def summarise_guides(last_df):
 			if guide_df.gRNA_Target_Sequence.unique() is not None else "")
 
 		summary_df.loc[i, "gRNA_flanking_sequences"] = ";".join(
-			[x for x in list(guide_df.gRNA_flanking_sequences.unique()) if x is not None and pandas.isna(x) is False]
+			[str(x) for x in list(guide_df.gRNA_flanking_sequences.unique()) if x is not None and isinstance(x, float) and not np.isnan(x) and pandas.isna(x) is False]
 			if pandas.isna(guide_df.gRNA_flanking_sequences.unique()) is False else "")
 
 		summary_df.loc[i, "gRNA_Target_Location"] = ";".join(
