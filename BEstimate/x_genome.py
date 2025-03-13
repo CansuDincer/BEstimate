@@ -114,11 +114,10 @@ def index_genome_wge(assembly, ens_ver, pam_sequence):
 				os.system("gunzip --keep %s/genome/%s.gz" % (ot_path, file_name))
 
 		print("Gathering chromosomes..")
-		csv_command = "python3 x_gather.py -i '%s/genome/%s' -o '%s/genome/csv/c_%s.csv' -p '%s'" % (
-		ot_path, file_name, ot_path, chromosome, pam_sequence)
-		csv_process = subprocess.Popen(csv_command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-									   stderr=subprocess.PIPE,
-									   text=True, shell=True)
+
+		csv_process = subprocess.Popen(
+			["python3", 'x_gather.py', '-i', '%s/genome/%s' % (ot_path, file_name), '-o', '%s/genome/csv/c_%s.csv' % (ot_path, chromosome),
+			 '-p', pam_sequence], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True)
 		while csv_process.poll() is None:
 			time.sleep(0.5)
 
@@ -149,11 +148,10 @@ def main():
 	:return:
 	"""
 
-	global args
-
 	is_genome = check_genome_exist(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"])
 
-	if is_genome:	return True
+	if is_genome:
+		return True
 	else:
 		print("Error: Please download the Humen Reference Genome from Ensembl before continue!")
 

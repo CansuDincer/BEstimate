@@ -8,6 +8,9 @@
 import csv, getopt, psycopg, subprocess, sys, argparse, sqlite3
 import numpy as np
 import pandas as pd
+import time
+import multiprocessing as mp
+import gc
 
 ###########################################################################################
 # Functions
@@ -37,11 +40,9 @@ def take_input():
 
 def find_crisprs(guide, wge_path, input_bin_file):
 	"""Find the CRISPR IDs for a given guide sequence by running the CRISPR-Analyser search command"""
-	print("____________")
-	print("%sCRISPR-Analyser/bin/crispr_analyser search -i '%s' -s %s -p 1" % (wge_path, input_bin_file, guide))
-	search_process = subprocess.run(
-		"%sCRISPR-Analyser/bin/crispr_analyser search -i '%s' -s %s -p 1"
-		% (wge_path, input_bin_file, guide), capture_output=True, text=True)
+	exe = wge_path + "CRISPR-Analyser/bin/crispr_analyser"
+	search_process = subprocess.run([exe, 'search', '-i' , input_bin_file, '-s', guide, '-p', '1'], capture_output=True, text=True, timeout=6000)
+
 	# get the response from subprocess and parse for the CRISPR IDs
 	search_output = search_process.stdout.splitlines()
 	print(f"search_output: {search_output}")
@@ -53,10 +54,13 @@ def get_off_target_summaries(inputfile, chunk, wge_path):
 	off_target_summaries = {}
 	# get the idx from the dataframe, remove empty values
 	crispr_ids = set(chunk["idx"].dropna().tolist())
-	script_args = "%sCRISPR-Analyser/bin/crispr_analyser align -i '%s'" % (wge_path, inputfile)
+	exe = wge_path + "CRISPR-Analyser/bin/crispr_analyser"
+	script_args = [exe, 'align', '-i', inputfile]
 
-	[script_args.append(str(crispr_id)) for crispr_id in crispr_ids]
-	align_process = subprocess.run(script_args, capture_output=True, text=True)
+	for crispr_id in crispr_ids:
+		script_args.append(str(crispr_id))
+
+	align_process = subprocess.run(script_args, capture_output=True, text=True, timeout=1800)
 	align_outputs = align_process.stdout.split("\n")
 	for output in align_outputs:
 		output = output.split("\t")
@@ -78,7 +82,7 @@ def fetch_crispr_data(crispr_id: int, cur: sqlite3.Cursor):
 
 
 
-def check_crispr_data(guide_sequence, crispr):
+def check_crispr_data(guide, crispr_seq):
 	"""Check if the guide sequence is in the CRISPR sequence"""
 	check = False
 	reverse_guide = "".join(DNA_COMPLEMENT.get(base, base) for base in reversed(guide))
@@ -92,56 +96,69 @@ def usage() -> None:
 		  "-o <output_csv_file> -p <path of wge>")
 
 
-def main(args):
-	input_csv_file = args["I_CSV"]
-	input_bin_file = args["BIN"]
-	output_csv_file = args["O_CSV"]
-	wge_path = args["PATH"]
+def get_ots(chunk):
+	global wge_path, input_bin_file
 
-	if input_csv_file == "" or input_bin_file == "" or output_csv_file == "" or wge_path == "":
-		sys.exit(2)
+	COLUMN_NAMES = list(chunk.columns) + ["CRISPR_sequence", "Chromosome", "Start", "Strand", "Off_target_summary",
+										  "idx"]
+	output_chunk = pd.DataFrame(columns=COLUMN_NAMES)
 
 	# connect to the database
-	con = sqlite3.connect("crisprs.db")
+	con = sqlite3.connect("crisprs.db", check_same_thread=False)
 	cur = con.cursor()
-	# read the input csv file in chunks
-	with pd.read_csv(input_csv_file, chunksize=20) as reader:
-		with open(output_csv_file, "a", newline="") as writer:
-			writer_header = True
 
-			# as we are appending to the file, we need to truncate it first
-			writer.truncate(0)
+	output_index = 0
+	for _index, row in chunk.iterrows():
+
+		# Get ot information
+		crispr_ids = find_crisprs(row["gRNA_Target_Sequence"], wge_path, input_bin_file)
+
+		for crispr_id in crispr_ids:
+			crisp_data = fetch_crispr_data(crispr_id, cur)
+			output_chunk.loc[output_index] = row
+			output_chunk.loc[output_index, "CRISPR_sequence"] = (crisp_data[0])
+			output_chunk.loc[output_index, "Chromosome"] = (crisp_data[1])
+			output_chunk.loc[output_index, "Start"] = crisp_data[2]
+			output_chunk.loc[output_index, "Strand"] = crisp_data[3]
+			output_chunk.loc[output_index, "idx"] = crispr_ids[0]
+			output_index += 1
+
+	get_off_target_summaries(input_bin_file, output_chunk, wge_path)
+
+	# drop the "idx" column and write the chunk to the output file
+	chunk_df = output_chunk.reset_index()[[col for col in COLUMN_NAMES if col != "idx"]]
+	return chunk_df
+
+
+def main():
+	global wge_path, input_bin_file, output_csv_file
+	# read the input csv file in chunkss
+
+	results_dfs = list()
+	with mp.Pool(4) as pool:
+		with pd.read_csv(input_csv_file, chunksize=100) as reader:
 			for chunk in reader:
-				COLUMN_NAMES = list(chunk.columns) + ["CRISPR_sequence", "Chromosome", "Start", "Strand", "Off_target_summary","idx"]
-				output_chunk = pd.DataFrame(columns=COLUMN_NAMES)
-				output_index = 0
-				for _index, row in chunk.iterrows():
-					crispr_ids = find_crisprs(row["gRNA_Target_Sequence"], wge_path, input_bin_file)
-					for crispr_id in crispr_ids:
-						crisp_data = fetch_crispr_data(crispr_id, cur)
-						print(crisp_data)
-						output_chunk.loc[output_index] = row
-						output_chunk.at[output_index, "CRISPR_sequence"] = (
-							crisp_data[0]
-						)
-						output_chunk.at[output_index, "Chromosome"] = (
-							crisp_data[1]
-						)
-						output_chunk.at[output_index, "Start"] = crisp_data[2]
-						output_chunk.at[output_index, "Strand"] = crisp_data[3]
-						output_chunk.at[output_index, "idx"] = crispr_ids[0]
-						output_index += 1
-				get_off_target_summaries(input_bin_file, output_chunk, wge_path)
-				print(f"output_chunk: {output_chunk}")
-				# drop the "idx" column and write the chunk to the output file
-				writer.write(
-					output_chunk.to_csv(
-						columns=COLUMN_NAMES[:-1],
-						header=writer_header,
-						index=False,
-					)
-				)
-				writer_header = False
+				results = pool.apply_async(get_ots, (chunk,))
+				gc.collect()
+				print(results.get())
+				results_dfs.append(results.get())
+	gc.collect()
+
+	output_df = pd.concat(results_dfs, ignore_index=True)
+	output_df.to_csv(output_csv_file + "wge_return.csv")
+
+	if len(output_df.index) > 0:
+		output_df = output_df[[col for col in output_df.columns if
+							   col not in ["CRISPR_sequence", "Chromosome", "Start", "Strand"]]].drop_duplicates()
+		output_df["exact"] = output_df.apply(lambda x: x.Off_target_summary.split(", ")[0].split(": ")[1], axis=1)
+		output_df["mm1"] = output_df.apply(lambda x: x.Off_target_summary.split(", ")[1].split(": ")[1], axis=1)
+		output_df["mm2"] = output_df.apply(lambda x: x.Off_target_summary.split(", ")[2].split(": ")[1], axis=1)
+		output_df["mm3"] = output_df.apply(lambda x: x.Off_target_summary.split(", ")[3].split(": ")[1], axis=1)
+		output_df["mm4"] = output_df.apply(lambda x: x.Off_target_summary.split(", ")[4].split(": ")[1].split("}")[0],
+										   axis=1)
+		output_df.to_csv(output_csv_file + "_ot_annotated_df.csv", index=False)
+
+	return output_df
 
 
 if __name__ == "__main__":
@@ -154,4 +171,12 @@ if __name__ == "__main__":
 	else:
 		path = args["PATH"] + "/"
 
-	main(args)
+	input_csv_file = args["I_CSV"]
+	input_bin_file = args["BIN"]
+	output_csv_file = args["O_CSV"]
+	wge_path = args["PATH"]
+
+	if input_csv_file == "" or input_bin_file == "" or output_csv_file == "" or wge_path == "":
+		sys.exit(2)
+
+	main()
