@@ -42,7 +42,7 @@ If you would like to see the off targets of WRN gene:
 
 ## Contact
 
-BEstimate is the product of Cansu Dincer, Dr Matthew Coelho and Dr Mathew Garnett from Garnett Group at the Wellcome Sanger Institute.
+BEstimate is the product of Cansu Dinçer, Matthew Coelho and Mathew Garnett from Garnett Group at the Wellcome Sanger Institute.
 
 For any problems or feedback on BEstimate, you can contact [here](mailto:cd7@sanger.ac.uk).
 
