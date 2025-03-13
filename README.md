@@ -12,7 +12,7 @@ Or you can directly use BEstimate environment if you have conda. Please follow b
 
 ## Program requirement for Off targets analysis
 
-BEstimate is using [CRISPR-Analyser]([https://github.com/htgt/CRISPR-Analyser]) for off targets analysis. If you would like to find off targets, please follow below.
+BEstimate is using [CRISPR-Analyser](https://github.com/htgt/CRISPR-Analyser) for off targets analysis. If you would like to find off targets, please follow below.
 
 - `cd ../`
 - `mkdir bin`
