@@ -51,6 +51,7 @@ For any problems or feedback on BEstimate, you can contact [here](mailto:cd7@san
 GNU AFFERO GENERAL PUBLIC LICENSE
 
 BEstimate: A Python module to design and annotate base editor gRNAs
+
 Copyright (C) 2025 Genome Research Limited
 
 Authors: Cansu Dinçer (cd7@sanger.ac.uk)
