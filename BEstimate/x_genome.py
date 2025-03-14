@@ -8,7 +8,7 @@
 # -----------------------------------------------------------------------------------------#
 
 
-import argparse, pandas, os
+import argparse, pandas, os, subprocess
 
 # Extracting Humen Reference Genome
 
@@ -29,7 +29,7 @@ def take_input():
 						help="The PAM sequence in which features used "
 							 "for searching activity window and editable nucleotide.")
 
-	parser.add_argument("-assembly", dest="ASSEMBLY", required=True, default="GRCh38",
+	parser.add_argument("-assembly", dest="ASSEMBLY", default="GRCh38",
 						help="The genome assembly that will be used!")
 
 	parser.add_argument("-o", dest="OUTPUT_PATH", default=os.getcwd() + "/",
@@ -147,6 +147,17 @@ def main():
 	Run whole script with the input from terminal
 	:return:
 	"""
+
+	try:
+		os.mkdir(os.getcwd() + "/../offtargets")
+	except FileExistsError:
+		pass
+
+	try:
+		os.mkdir(os.getcwd() + "/../offtargets/genome/")
+		os.mkdir(os.getcwd() + "/../offtargets/genome/cvs/")
+	except FileExistsError:
+		pass
 
 	is_genome = check_genome_exist(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"])
 

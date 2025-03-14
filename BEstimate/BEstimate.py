@@ -2728,12 +2728,12 @@ Off target analysis: %s"""
 		whole_vep_df = pandas.DataFrame()
 		if args["OUTPUT_FILE"] + "_vep_df.csv" not in os.listdir(path):
 			if args["OUTPUT_FILE"] + "_hgvs_df.csv" not in os.listdir(path):
-				hgvs_df = extract_hgvs(edit_df=edit_df, ensembl_object=ensembl_obj,
-									   transcript_id=args["TRANSCRIPT"],
-									   edited_nucleotide=args["EDIT"], new_nucleotide=args["EDIT_TO"],
-									   activity_window=[int(args["ACTWINDOW"].split("-")[0]),
-														int(args["ACTWINDOW"].split("-")[1])],
-									   mutations=mutations)
+				hgvs_df = extract_hgvs_df(edit_df=edit_df, ensembl_object=ensembl_obj,
+										  transcript_id=args["TRANSCRIPT"],
+										  edited_nucleotide=args["EDIT"], new_nucleotide=args["EDIT_TO"],
+										  activity_window=[int(args["ACTWINDOW"].split("-")[0]),
+														   int(args["ACTWINDOW"].split("-")[1])],
+										  mutations=mutations)
 				if hgvs_df is not None and len(hgvs_df.index) != 0:
 					hgvs_df.to_csv(path + args["OUTPUT_FILE"] + "_hgvs_df.csv")
 					print("HGVS nomenclatures were collected.\n")
