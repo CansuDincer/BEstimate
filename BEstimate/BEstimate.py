@@ -2724,7 +2724,7 @@ Off target analysis: %s"""
 		Annotation - VEP Annotation
 --------------------------------------------------------------
         \n""")
-		file_name = args["OUTPUT_FILE"] + "_summary_df.csv"
+
 		whole_vep_df = pandas.DataFrame()
 		if args["OUTPUT_FILE"] + "_vep_df.csv" not in os.listdir(path):
 			if args["OUTPUT_FILE"] + "_hgvs_df.csv" not in os.listdir(path):
