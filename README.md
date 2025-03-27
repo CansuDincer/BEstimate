@@ -38,6 +38,7 @@ If you would like to run with a specific point mutation, with NGN PAM and with V
 `python3 BEstimate.py -gene PIK3CA -assembly GRCh38 -pamseq NGN -pamwin 21-23 -actwin 4-8 -protolen 20 -mutation '3:g.179218303G>A' -edit A -edit_to G -vep -ofile PIK3CA_NGN_ABE_mE545K -o ../output/`
 
 To run off target analysis, first you need to have *Ensembl* Genome and its indexes for the interested PAM sequence. `x_genome.py` has been prepared for the user to download and index the genome for CRISPR-Analyser pipeline.
+
 `python3 x_genome.py -pamseq NGN -wge_path ../bin/`
 
 Then, you can run the off target analysis, see below for *BRAF* gene:
