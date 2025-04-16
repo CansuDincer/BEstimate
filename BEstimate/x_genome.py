@@ -15,6 +15,7 @@ import argparse, pandas, os, subprocess, time
 ###########################################################################################
 # Take inputs
 
+
 def take_input():
 	parser = argparse.ArgumentParser(prog="BEstimate - Genome",
 									 usage="%(prog)s [inputs]")

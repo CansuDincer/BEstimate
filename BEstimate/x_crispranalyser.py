@@ -22,7 +22,6 @@ DNA_COMPLEMENT = {
 	"T": "A",
 }
 
-
 def take_input():
 	parser = argparse.ArgumentParser(prog="CRISPR-Analyser",
 									 usage="%(prog)s [inputs]")

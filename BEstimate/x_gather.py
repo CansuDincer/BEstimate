@@ -10,6 +10,7 @@ import collections, csv, getopt, re, sys, time
 ###########################################################################################
 # Functions
 
+
 def reverse_complement(sequence: str) -> str:
 	"""Return the reverse complement of a DNA sequence.
 

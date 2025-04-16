@@ -13,7 +13,6 @@ import getopt, sqlite3, sys, time
 def usage():
     print("x_index.py -i <input CSV file> -d <database file> -f <offset>")
 
-
 def main(argv):
     start = time.time()
     inputfiles = []
