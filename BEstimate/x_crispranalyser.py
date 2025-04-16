@@ -40,7 +40,7 @@ def take_input():
 
 def find_crisprs(guide, wge_path, input_bin_file):
 	"""Find the CRISPR IDs for a given guide sequence by running the CRISPR-Analyser search command"""
-	exe = wge_path + "CRISPR-Analyser/bin/crispr_analyser"
+	exe = wge_path + "bin/crispr_analyser"
 	search_process = subprocess.run([exe, 'search', '-i' , input_bin_file, '-s', guide, '-p', '1'], capture_output=True, text=True, timeout=6000)
 
 	# get the response from subprocess and parse for the CRISPR IDs
@@ -54,7 +54,7 @@ def get_off_target_summaries(inputfile, chunk, wge_path):
 	off_target_summaries = {}
 	# get the idx from the dataframe, remove empty values
 	crispr_ids = set(chunk["idx"].dropna().tolist())
-	exe = wge_path + "CRISPR-Analyser/bin/crispr_analyser"
+	exe = wge_path + "bin/crispr_analyser"
 	script_args = [exe, 'align', '-i', inputfile]
 
 	for crispr_id in crispr_ids:

@@ -104,7 +104,7 @@ def take_input():
 	parser.add_argument("-v_ensembl", dest="VERSION", default="113",
 						help="The ensembl version in which genome will be retrieved "
 							 "(if the assembly is GRCh37 then please use <=75)")
-	parser.add_argument("-wge_path", dest="WGE_PATH", default=os.getcwd() + "../../CRISPR-Analyser/",
+	parser.add_argument("-wge_path", dest="WGE_PATH", default=os.getcwd() + "../../CRISPR-Analyser",
 						help="The path where the CRISPR Analyser has been installed.")
 
 	parsed_input = parser.parse_args()
@@ -1786,6 +1786,7 @@ def retrieve_vep_info(hgvs_df, ensembl_object, uniprot, transcript_id=None):
 	hgvs_obj = dict()
 	for i in range(t):
 		x = 200 * i
+		print(x)
 		hgvs_list = list(hgvs_index.loc[x: x + 199]["HGVS"].values)
 		hgvs_json = json.dumps(hgvs_list)
 
@@ -1795,25 +1796,31 @@ def retrieve_vep_info(hgvs_df, ensembl_object, uniprot, transcript_id=None):
 			try:
 				vep_request = requests.post(server + ext, headers=headers, params=params,
 											data='{ "hgvs_notations" : %s }' % hgvs_json)
-				if not vep_request.status_code != requests.codes.ok:
-					print("No response from VEP %d - %d" % (x, x + 199))
-				else:
-					try:
-						whole_vep = json.loads(vep_request.text)
-						for hgvs in hgvs_list:
-							obj = Variant(hgvs=hgvs, gene=ensembl_object.hugo_symbol,
-										  transcript=transcript_id, strand=strand)
-							obj.extract_vep_obj(vep_json=whole_vep)
-							obj.extract_consequences()
-							hgvs_obj[hgvs] = obj
-					except json.decoder.JSONDecodeError:
-						print("No retrieval for %s" % hgvs)
 
+				if vep_request.status_code == requests.codes.ok:
+					break
+				else:
+					print("No response in %s" % x)
 			except requests.exceptions.RequestException as e:
-				time.sleep(2 ** check_point)
+				# time.sleep(2 ** check_point)
 				check_point += 1
 				if check_point >= max_retry:
 					raise e
+
+		if vep_request.status_code != requests.codes.ok:
+			print("No response from VEP %d - %d" % (x, x + 199))
+		else:
+			try:
+				whole_vep = json.loads(vep_request.text)
+				for hgvs in hgvs_list:
+					obj = Variant(hgvs=hgvs, gene=ensembl_object.hugo_symbol,
+								  transcript=transcript_id, strand=strand)
+					obj.extract_vep_obj(vep_json=whole_vep)
+					obj.extract_consequences()
+					hgvs_obj[hgvs] = obj
+				print("Response collected from VEP for %d - %d" % (x, x + 199))
+			except json.decoder.JSONDecodeError:
+				print("No retrieval for %s" % hgvs)
 
 	hgvs_list = list(hgvs_index.loc[x + 200: x + 200 + r]["HGVS"].values)
 	hgvs_json = json.dumps(hgvs_list)
@@ -1824,22 +1831,26 @@ def retrieve_vep_info(hgvs_df, ensembl_object, uniprot, transcript_id=None):
 		try:
 			vep_request = requests.post(server + ext, headers=headers, params=params,
 										data='{ "hgvs_notations" : %s }' % hgvs_json)
-			if not vep_request.status_code != requests.codes.ok:
-				print("No response from VEP %d - %d" % (x + 200, x + 200 + r))
+			if vep_request.status_code == requests.codes.ok:
+				break
 
-			else:
-				whole_vep = vep_request.json()
-				for hgvs in hgvs_list:
-					obj = Variant(hgvs=hgvs, gene=ensembl_object.hugo_symbol,
-								  transcript=transcript_id, strand=strand)
-					obj.extract_vep_obj(vep_json=whole_vep)
-					obj.extract_consequences()
-					hgvs_obj[hgvs] = obj
 		except requests.exceptions.RequestException as e:
-			time.sleep(2 ** check_point)
+			# time.sleep(2 ** check_point)
 			check_point += 1
 			if check_point >= max_retry:
 				raise e
+
+	if vep_request.status_code != requests.codes.ok:
+		print("No response from VEP %d - %d" % (x + 200, x + 200 + r))
+	else:
+		whole_vep = vep_request.json()
+		for hgvs in hgvs_list:
+			obj = Variant(hgvs=hgvs, gene=ensembl_object.hugo_symbol,
+						  transcript=transcript_id, strand=strand)
+			obj.extract_vep_obj(vep_json=whole_vep)
+			obj.extract_consequences()
+			hgvs_obj[hgvs] = obj
+		print("Response collected from VEP for %d - %d" % (x + 200, x + 200 + r))
 
 	for hgvs, obj in hgvs_obj.items():
 		ind = list(hgvs_df[hgvs_df.HGVS == hgvs].index)
@@ -2400,7 +2411,7 @@ def summarise_guides(last_df):
 		summary_df.loc[i, "# Edits/guide"] = guide_df["# Edits/guide"].unique()[0]
 
 		summary_df.loc[i, "Poly_T"] = True if True in guide_df.Poly_T.unique() else False
-		summary_df.loc[i, "GC%"] = "".join([x for x in guide_df["GC%"].unique()])
+		summary_df.loc[i, "GC%"] = "".join([str(x) for x in guide_df["GC%"].unique()])
 
 		summary_df.loc[i, "allele"] = ";".join(
 			[x for x in list(guide_df.allele.unique()) if x is not None and pandas.isna(x) is False])
@@ -2573,10 +2584,10 @@ def run_offtargets(genome, file_name, final_df):
 	"""
 	global ot_path, wge_path
 
-	print("python3 run_CRISPR_Analyser.py -c '%s' -b '%s' -o '%s' -p '%s'"
+	print("python3 x_crispranalyser.py -c '%s' -b '%s' -o '%s' -p '%s'"
 		  % (path + file_name + final_df, ot_path + "/genome/" + genome + ".bin",
 			 ot_path + "/wge_files/" + file_name + "_wge_output.csv", wge_path))
-	os.system("python3 run_CRISPR_Analyser.py -c '%s' -b '%s' -o '%s' -p '%s'"
+	os.system("python3 x_crispranalyser.py -c '%s' -b '%s' -o '%s' -p '%s'"
 			  % (path + file_name + final_df, ot_path + "/genome/" + genome + ".bin",
 				 ot_path + "/wge_files/" + file_name + "_wge_output.csv", wge_path))
 
@@ -2585,7 +2596,6 @@ def run_offtargets(genome, file_name, final_df):
 	else:
 		print("No alignment - off target")
 		return False
-
 
 
 ###########################################################################################
@@ -2724,7 +2734,7 @@ Off target analysis: %s"""
 		Annotation - VEP Annotation
 --------------------------------------------------------------
         \n""")
-
+		file_name = args["OUTPUT_FILE"] + "_summary_df.csv"
 		whole_vep_df = pandas.DataFrame()
 		if args["OUTPUT_FILE"] + "_vep_df.csv" not in os.listdir(path):
 			if args["OUTPUT_FILE"] + "_hgvs_df.csv" not in os.listdir(path):
@@ -2827,7 +2837,7 @@ Off target analysis: %s"""
 
 		try:
 			os.mkdir(os.getcwd() + "/../offtargets/wge_files/")
-			os.mkdir(os.getcwd() + "/../offtargets/genome/cvs/")
+			os.mkdir(os.getcwd() + "/../offtargets/genome/csv/")
 
 		except FileExistsError:
 			pass
@@ -2854,7 +2864,6 @@ Off target analysis: %s"""
 				return True
 			else:
 				print("Off target information cannot be added.")
-
 
 
 if __name__ == '__main__':

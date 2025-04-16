@@ -1,14 +1,14 @@
 # -----------------------------------------------------------------------------------------#
 #                                                                                          #
 #                                  B E s t i m a t e                                       #
+#                           Genome Retrieval and Indexing                                  #
 #                        Author : Cansu Dincer cd7@sanger.ac.uk                            #
-#                         Dr Matthew Coelho & Dr Mathew Garnett                            #
-#                              Wellcome Sanger Institute                                   #
 #                                                                                          #
 # -----------------------------------------------------------------------------------------#
 
 
-import argparse, pandas, os, subprocess
+import argparse, pandas, os, subprocess, time
+
 
 # Extracting Humen Reference Genome
 
@@ -39,7 +39,7 @@ def take_input():
 						help="The ensembl version in which genome will be retrieved "
 							 "(if the assembly is GRCh37 then please use <=75)")
 
-	parser.add_argument("-wge_path", dest="WGE_PATH", default=os.getcwd() + "../../CRISPR-Analyser/",
+	parser.add_argument("-wge_path", dest="WGE_PATH", default=os.getcwd() + "../../bin/CRISPR-Analyser/",
 						help="The path where the CRISPR Analyser has been installed.")
 
 	parsed_input = parser.parse_args()
@@ -60,9 +60,16 @@ def check_genome_exist(assembly, ens_ver):
 	elif assembly == "GRCh38":
 		file_main_text = "Homo_sapiens.GRCh38.dna.chromosome"
 
-	if "%s.all.fa.gz" % file_main_text not in os.listdir("%s/genome/" % ot_path):
+	check_files = True
+	for chromosome in chromosomes:
+		if "%s.%s.fa.gz" % (file_main_text, chromosome) not in os.listdir(ot_path + "/genome/"):
+			check_files = False
+
+	if check_files is False:
+
 		print(
 			"Genome is not found, BEstimate is downloading the %s Ensembl genome - version %s\n" % (assembly, ens_ver))
+
 		if "chromosome_ftps.txt" not in os.listdir("%s/genome/" % ot_path):
 			f = open("%s/genome/chromosome_ftps.txt" % ot_path, "w")
 			for chromosome in chromosomes:
@@ -76,8 +83,10 @@ def check_genome_exist(assembly, ens_ver):
 		curl_command = "curl --parallel --parallel-immediate --parallel-max 25 --fail-with-body --retry 5 " \
 					   "--config %s/genome/chromosome_ftps.txt -C -" % ot_path
 		print("Collecting the genome files from Ensembl FTP..\n")
+
 		_ = subprocess.Popen(curl_command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
 							 text=True, shell=True)
+
 		check_files = True
 		for chromosome in chromosomes:
 			if "%s.%s.fa.gz" % (file_main_text, chromosome) not in os.listdir(ot_path + "/genome/"):
@@ -88,8 +97,12 @@ def check_genome_exist(assembly, ens_ver):
 						"Homo_sapiens.GRCh38.dna.chromosome.<chromosome>.fa.gz if the assembl is GRCh38, otherwise" \
 						"Homo_sapiens.GRCh37.<version>.dna.chromosome.<chromosome>.fa.gz"
 
-		if check_files: return True
-		else: return error_message
+		if check_files:
+			return True
+		else:
+			return error_message
+	else:
+		return True
 
 
 def index_genome_wge(assembly, ens_ver, pam_sequence):
@@ -106,21 +119,25 @@ def index_genome_wge(assembly, ens_ver, pam_sequence):
 		chromosome_input_text_list.append("-i %s/genome/csv/c_%s.csv " % (ot_path, chromosome))
 	chromosome_input_text = " ".join(chromosome_input_text_list)
 
-	# Gather all chromosome fasta files into cvs files
+	# Gather all chromosome fasta files into csv files
+	print("Gathering chromosomes..\n")
 	for chromosome in chromosomes:
 		file_name = "%s.%s.fa" % (file_main_text, chromosome)
 		if "c1_%s.csv" % chromosome not in os.listdir("%s/genome/csv/" % ot_path):
 			if file_name not in os.listdir("%s/genome/" % ot_path):
 				os.system("gunzip --keep %s/genome/%s.gz" % (ot_path, file_name))
 
-		print("Gathering chromosomes..")
+			print("Chromosome %s" % chromosome)
+			print("python3 x_gather.py -i %s/genome/%s -o %s/genome/csv/c_%s.csv -p %s" % (
+			ot_path, file_name, ot_path, chromosome, pam_sequence))
+			os.system("python3 x_gather.py -i %s/genome/%s -o %s/genome/csv/c_%s.csv -p %s" % (
+			ot_path, file_name, ot_path, chromosome, pam_sequence))
 
-		csv_process = subprocess.Popen(
-			["python3", 'x_gather.py', '-i', '%s/genome/%s' % (ot_path, file_name), '-o', '%s/genome/csv/c_%s.csv' % (ot_path, chromosome),
-			 '-p', pam_sequence], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True)
-		while csv_process.poll() is None:
-			time.sleep(0.5)
-
+			while "c_%s.csv" % (chromosome) not in os.listdir("%s/genome/csv/" % ot_path):
+				print("Waiting chromosome %s.." % chromosome)
+				time.sleep(10)
+	print()
+	print("python3 x_index.py %s -d crisprs.db" % chromosome_input_text)
 	os.system("python3 x_index.py %s -d crisprs.db" % chromosome_input_text)
 
 	if "%s.bin" % file_main_text not in os.listdir("%s/genome/" % ot_path):
@@ -142,20 +159,19 @@ def index_genome_wge(assembly, ens_ver, pam_sequence):
 # Execution
 
 
-def main():
+def get_genome():
 	"""
 	Run whole script with the input from terminal
 	:return:
 	"""
 
 	try:
-		os.mkdir(os.getcwd() + "/../offtargets")
+		os.mkdir(ot_path)
 	except FileExistsError:
 		pass
 
 	try:
-		os.mkdir(os.getcwd() + "/../offtargets/genome/")
-		os.mkdir(os.getcwd() + "/../offtargets/genome/cvs/")
+		os.mkdir(ot_path + "/genome/")
 	except FileExistsError:
 		pass
 
@@ -165,11 +181,17 @@ def main():
 		return True
 	else:
 		print("Error: Please download the Humen Reference Genome from Ensembl before continue!")
+		return False
 
-	if is_genome:
-		print("Indexing the genome..")
-		res = index_genome_wge(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"], pam_sequence=args["PAMSEQ"])
 
+def get_index():
+	try:
+		os.mkdir(ot_path + "/genome/csv/")
+	except FileExistsError:
+		pass
+
+	print("Indexing the genome..")
+	res = index_genome_wge(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"], pam_sequence=args["PAMSEQ"])
 	return res
 
 
@@ -194,4 +216,9 @@ if __name__ == '__main__':
 	else:
 		wge_path = args["WGE_PATH"] + "/"
 
-	main()
+	g = get_genome()
+	if g:
+		get_index()
+
+	else:
+		print("no index")

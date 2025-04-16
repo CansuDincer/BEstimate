@@ -1,7 +1,6 @@
 name: bestimate
 channels:
   - bioconda
-  - anaconda
   - conda-forge
   - defaults
 dependencies:
