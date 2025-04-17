@@ -39,14 +39,6 @@ If you would like to run with a specific point mutation, with NGN PAM and with V
 
 To run off target analysis, first you need to have *Ensembl* Genome and its indexes for the interested PAM sequence. `x_genome.py` has been prepared for the user to download and index the genome for CRISPR-Analyser pipeline.
 
-`python3 x_genome.py -pamseq NGN -wge_path ../bin/`
-
-Then, you can run the off target analysis, see below for *BRAF* gene:
-`python3 BEstimate.py -gene BRAF -assembly GRCh38 -pamseq NGN -edit A -edit_to G -vep -ot -wge_path ../bin/ -o ../output/ -ofile BRAF_ABE_NGN`
-
-## Downloading and Indexing Ensembl Genome
-
-If it suggested to download and index the genome before. You can use below code to download all chromosome, gather all of them and index them:
 What you will need:
 - **pamseq** > PAM sequence as the genome will index accordingly
 - **assembly** > The Ensembl genome assembly
@@ -54,6 +46,9 @@ What you will need:
 - **wge_path** > The path you installed CRISPR Analyser 
 
 `python3 x_genome.py -pamseq NGN -assembly GRCh38 -v_ensembl 113 -wge_path '../../bin/CRISPR-Analyser/'`
+
+Then, you can run the off target analysis, see below for *BRAF* gene:
+`python3 BEstimate.py -gene BRAF -assembly GRCh38 -pamseq NGN -edit A -edit_to G -vep -ot -wge_path ../bin/CRISPR-Analyser/ -o ../output/ -ofile BRAF_ABE_NGN`
 
 ## Contact
 
