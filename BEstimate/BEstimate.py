@@ -2830,8 +2830,8 @@ Off target analysis: %s"""
 			file_main_text = "Homo_sapiens.GRCh38.dna.chromosome"
 
 		if "%s.bin" % file_main_text not in os.listdir("%s/genome/" % ot_path):
-			os.system("python3 x_genome.py -pamseq '%s' -assembly '%s' -o '%s' -v_ensembl '%s' -wge_path '%s'"
-					  % (args["PAMSEQ"], args["ASSEMBLY"], path, args["VERSION"], wge_path))
+			os.system("python3 x_genome.py -pamseq '%s' -assembly '%s' -v_ensembl '%s' -wge_path '%s'"
+					  % (args["PAMSEQ"], args["ASSEMBLY"], args["VERSION"], wge_path))
 
 		while "%s.bin" % file_main_text in os.listdir("%s/genome/" % ot_path):
 			time.sleep(20)

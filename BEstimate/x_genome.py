@@ -33,9 +33,6 @@ def take_input():
 	parser.add_argument("-assembly", dest="ASSEMBLY", default="GRCh38",
 						help="The genome assembly that will be used!")
 
-	parser.add_argument("-o", dest="OUTPUT_PATH", default=os.getcwd() + "/",
-						help="The path for output. If not specified the current directory will be used!")
-
 	parser.add_argument("-v_ensembl", dest="VERSION", default="113",
 						help="The ensembl version in which genome will be retrieved "
 							 "(if the assembly is GRCh37 then please use <=75)")
@@ -143,10 +140,10 @@ def index_genome_wge(assembly, ens_ver, pam_sequence):
 
 	if "%s.bin" % file_main_text not in os.listdir("%s/genome/" % ot_path):
 		# Index genome
-		print("%sCRISPR-Analyser/bin/crispr_analyser index -a '%s' -s 'Human' -e '1' %s "
+		print("%sbin/crispr_analyser index -a '%s' -s 'Human' -e '1' %s "
 			  "-o '%s/genome/%s.bin'"
 			  % (wge_path, ens_ver, chromosome_input_text, ot_path, file_main_text))
-		os.system("%sCRISPR-Analyser/bin/crispr_analyser index -a '%s' -s 'Human' -e '1' %s "
+		os.system("%sbin/crispr_analyser index -a '%s' -s 'Human' -e '1' %s "
 				  "-o '%s/genome/%s.bin'"
 				  % (wge_path, ens_ver, chromosome_input_text, ot_path, file_main_text))
 
@@ -202,12 +199,6 @@ if __name__ == '__main__':
 	# Retrieve input
 
 	args = take_input()
-	# Output Path
-	path = ""
-	if args["OUTPUT_PATH"][-1] == "/":
-		path = args["OUTPUT_PATH"]
-	else:
-		path = args["OUTPUT_PATH"] + "/"
 
 	ot_path = os.getcwd() + "/../offtargets"
 
