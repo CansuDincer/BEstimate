@@ -1790,25 +1790,15 @@ def retrieve_vep_info(hgvs_df, ensembl_object, uniprot, transcript_id=None):
 		hgvs_list = list(hgvs_index.loc[x: x + 199]["HGVS"].values)
 		hgvs_json = json.dumps(hgvs_list)
 
-		check_point = 0
-		max_retry = 3
-		while check_point < max_retry:
-			try:
-				vep_request = requests.post(server + ext, headers=headers, params=params,
-											data='{ "hgvs_notations" : %s }' % hgvs_json)
-
-				if vep_request.status_code == requests.codes.ok:
-					break
-				else:
-					print("No response in %s" % x)
-			except requests.exceptions.RequestException as e:
-				# time.sleep(2 ** check_point)
-				check_point += 1
-				if check_point >= max_retry:
-					raise e
+		try:
+			vep_request = requests.post(server + ext, headers=headers, params=params,
+										data='{ "hgvs_notations" : %s }' % hgvs_json)
+		except requests.exceptions.RequestException as e:
+			raise e
 
 		if vep_request.status_code != requests.codes.ok:
 			print("No response from VEP %d - %d" % (x, x + 199))
+
 		else:
 			try:
 				whole_vep = json.loads(vep_request.text)
@@ -1825,20 +1815,12 @@ def retrieve_vep_info(hgvs_df, ensembl_object, uniprot, transcript_id=None):
 	hgvs_list = list(hgvs_index.loc[x + 200: x + 200 + r]["HGVS"].values)
 	hgvs_json = json.dumps(hgvs_list)
 
-	check_point = 0
-	max_retry = 3
-	while check_point < max_retry:
-		try:
-			vep_request = requests.post(server + ext, headers=headers, params=params,
-										data='{ "hgvs_notations" : %s }' % hgvs_json)
-			if vep_request.status_code == requests.codes.ok:
-				break
+	try:
+		vep_request = requests.post(server + ext, headers=headers, params=params,
+									data='{ "hgvs_notations" : %s }' % hgvs_json)
 
-		except requests.exceptions.RequestException as e:
-			# time.sleep(2 ** check_point)
-			check_point += 1
-			if check_point >= max_retry:
-				raise e
+	except requests.exceptions.RequestException as e:
+		raise e
 
 	if vep_request.status_code != requests.codes.ok:
 		print("No response from VEP %d - %d" % (x + 200, x + 200 + r))
