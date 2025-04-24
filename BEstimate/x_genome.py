@@ -15,7 +15,6 @@ import argparse, pandas, os, subprocess, time
 ###########################################################################################
 # Take inputs
 
-
 def take_input():
 	parser = argparse.ArgumentParser(prog="BEstimate - Genome",
 									 usage="%(prog)s [inputs]")
@@ -32,6 +31,9 @@ def take_input():
 
 	parser.add_argument("-assembly", dest="ASSEMBLY", default="GRCh38",
 						help="The genome assembly that will be used!")
+
+	parser.add_argument("-o", dest="OUTPUT_PATH", default=os.getcwd() + "/",
+						help="The path for output. If not specified the current directory will be used!")
 
 	parser.add_argument("-v_ensembl", dest="VERSION", default="113",
 						help="The ensembl version in which genome will be retrieved "
@@ -112,38 +114,38 @@ def index_genome_wge(assembly, ens_ver, pam_sequence):
 	elif assembly == "GRCh38":
 		file_main_text = "Homo_sapiens.GRCh38.dna.chromosome"
 
-	chromosome_input_text_list = list()
-	for chromosome in chromosomes:
-		chromosome_input_text_list.append("-i %s/genome/csv/c_%s.csv " % (ot_path, chromosome))
-	chromosome_input_text = " ".join(chromosome_input_text_list)
-
-	# Gather all chromosome fasta files into csv files
-	print("Gathering chromosomes..\n")
-	for chromosome in chromosomes:
-		file_name = "%s.%s.fa" % (file_main_text, chromosome)
-		if "c1_%s.csv" % chromosome not in os.listdir("%s/genome/csv/" % ot_path):
-			if file_name not in os.listdir("%s/genome/" % ot_path):
-				os.system("gunzip --keep %s/genome/%s.gz" % (ot_path, file_name))
-
-			print("Chromosome %s" % chromosome)
-			print("python3 x_gather.py -i %s/genome/%s -o %s/genome/csv/c_%s.csv -p %s" % (
-			ot_path, file_name, ot_path, chromosome, pam_sequence))
-			os.system("python3 x_gather.py -i %s/genome/%s -o %s/genome/csv/c_%s.csv -p %s" % (
-			ot_path, file_name, ot_path, chromosome, pam_sequence))
-
-			while "c_%s.csv" % (chromosome) not in os.listdir("%s/genome/csv/" % ot_path):
-				print("Waiting chromosome %s.." % chromosome)
-				time.sleep(10)
-	print()
-	print("python3 x_index.py %s -d crisprs.db" % chromosome_input_text)
-	os.system("python3 x_index.py %s -d crisprs.db" % chromosome_input_text)
-
 	if "%s.bin" % file_main_text not in os.listdir("%s/genome/" % ot_path):
+		chromosome_input_text_list = list()
+		for chromosome in chromosomes:
+			chromosome_input_text_list.append("-i %s/genome/csv/c_%s.csv " % (ot_path, chromosome))
+		chromosome_input_text = " ".join(chromosome_input_text_list)
+
+		# Gather all chromosome fasta files into csv files
+		print("Gathering chromosomes..\n")
+		for chromosome in chromosomes:
+			file_name = "%s.%s.fa" % (file_main_text, chromosome)
+			if "c1_%s.csv" % chromosome not in os.listdir("%s/genome/csv/" % ot_path):
+				if file_name not in os.listdir("%s/genome/" % ot_path):
+					os.system("gunzip --keep %s/genome/%s.gz" % (ot_path, file_name))
+
+				print("Chromosome %s" % chromosome)
+				print("python3 x_gather.py -i %s/genome/%s -o %s/genome/csv/c_%s.csv -p %s" % (
+				ot_path, file_name, ot_path, chromosome, pam_sequence))
+				os.system("python3 x_gather.py -i %s/genome/%s -o %s/genome/csv/c_%s.csv -p %s" % (
+				ot_path, file_name, ot_path, chromosome, pam_sequence))
+
+				while "c_%s.csv" % (chromosome) not in os.listdir("%s/genome/csv/" % ot_path):
+					print("Waiting chromosome %s.." % chromosome)
+					time.sleep(10)
+		print()
+		print("python3 x_index.py %s -d crisprs.db" % chromosome_input_text)
+		os.system("python3 x_index.py %s -d crisprs.db" % chromosome_input_text)
+
 		# Index genome
-		print("%sbin/crispr_analyser index -a '%s' -s 'Human' -e '1' %s "
+		print("%sCRISPR-Analyser/bin/crispr_analyser index -a '%s' -s 'Human' -e '1' %s "
 			  "-o '%s/genome/%s.bin'"
 			  % (wge_path, ens_ver, chromosome_input_text, ot_path, file_main_text))
-		os.system("%sbin/crispr_analyser index -a '%s' -s 'Human' -e '1' %s "
+		os.system("%sCRISPR-Analyser/bin/crispr_analyser index -a '%s' -s 'Human' -e '1' %s "
 				  "-o '%s/genome/%s.bin'"
 				  % (wge_path, ens_ver, chromosome_input_text, ot_path, file_main_text))
 
@@ -151,6 +153,24 @@ def index_genome_wge(assembly, ens_ver, pam_sequence):
 		return True
 	else:
 		return False
+
+
+def check_index_file(assembly, ens_ver, pam_sequence):
+	global ot_path, wge_path
+
+	if assembly == "GRCh37":
+		file_main_text = "Homo_sapiens.GRCh37.%s.dna.chromosome" % ens_ver
+	elif assembly == "GRCh38":
+		file_main_text = "Homo_sapiens.GRCh38.dna.chromosome"
+
+	if "%s.bin" % file_main_text not in os.listdir("%s/genome/" % ot_path):
+		return False
+
+	else:
+		if "crisprs.db" in os.listdir(os.getcwd()):
+			return True
+		else:
+			return False
 
 
 ###########################################################################################
@@ -173,7 +193,12 @@ def get_genome():
 	except FileExistsError:
 		pass
 
-	is_genome = check_genome_exist(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"])
+	is_index = check_index_file(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"], pam_sequence=args["PAMSEQ"])
+
+	if is_index:
+		is_genome = True
+	else:
+		is_genome = check_genome_exist(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"])
 
 	if is_genome:
 		return True
@@ -188,9 +213,14 @@ def get_index():
 	except FileExistsError:
 		pass
 
-	print("Indexing the genome..")
-	res = index_genome_wge(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"], pam_sequence=args["PAMSEQ"])
-	return res
+	is_index = check_index_file(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"], pam_sequence=args["PAMSEQ"])
+
+	if is_index:
+		return True
+	else:
+		print("Indexing the genome..")
+		res = index_genome_wge(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"], pam_sequence=args["PAMSEQ"])
+		return res
 
 
 if __name__ == '__main__':
@@ -199,6 +229,12 @@ if __name__ == '__main__':
 	# Retrieve input
 
 	args = take_input()
+	# Output Path
+	path = ""
+	if args["OUTPUT_PATH"][-1] == "/":
+		path = args["OUTPUT_PATH"]
+	else:
+		path = args["OUTPUT_PATH"] + "/"
 
 	ot_path = os.getcwd() + "/../offtargets"
 

@@ -366,8 +366,6 @@ class Ensembl:
 							mutation_location = int(
 								re.match("([0-9]+)([a-z]+)", alteration.split(">")[0], re.I).groups()[0])
 							altered_nuc = re.match("([0-9]+)([a-z]+)", alteration.split(">")[0], re.I).groups()[1]
-							print(alteration)
-							print(altered_nuc)
 							new_nuc = alteration.split(">")[1]
 
 							# Check if altered nucleotide is in the given location
@@ -1393,7 +1391,7 @@ def find_editable_nucleotide(crispr_df, searched_nucleotide, activity_window, pa
 							if nuc_ind in list(range(activity_window[0], activity_window[1])) and
 							row["gRNA_Target_Sequence"][nuc_ind] == searched_nucleotide]
 		except TypeError:
-			print(row)
+			print("TypeError on ", row)
 		if searched_ind is not []:
 			# If there is an editable nucleotide in the activity sites
 			actual_inds = []
@@ -1786,19 +1784,28 @@ def retrieve_vep_info(hgvs_df, ensembl_object, uniprot, transcript_id=None):
 	hgvs_obj = dict()
 	for i in range(t):
 		x = 200 * i
-		print(x)
 		hgvs_list = list(hgvs_index.loc[x: x + 199]["HGVS"].values)
 		hgvs_json = json.dumps(hgvs_list)
 
-		try:
-			vep_request = requests.post(server + ext, headers=headers, params=params,
-										data='{ "hgvs_notations" : %s }' % hgvs_json)
-		except requests.exceptions.RequestException as e:
-			raise e
+		check_point = 0
+		max_retry = 3
+		while check_point < max_retry:
+			try:
+				vep_request = requests.post(server + ext, headers=headers, params=params,
+											data='{ "hgvs_notations" : %s }' % hgvs_json)
+
+				if vep_request.status_code == requests.codes.ok:
+					break
+				else:
+					print("No response in %s" % x)
+			except requests.exceptions.RequestException as e:
+				# time.sleep(2 ** check_point)
+				check_point += 1
+				if check_point >= max_retry:
+					raise e
 
 		if vep_request.status_code != requests.codes.ok:
 			print("No response from VEP %d - %d" % (x, x + 199))
-
 		else:
 			try:
 				whole_vep = json.loads(vep_request.text)
@@ -1808,19 +1815,26 @@ def retrieve_vep_info(hgvs_df, ensembl_object, uniprot, transcript_id=None):
 					obj.extract_vep_obj(vep_json=whole_vep)
 					obj.extract_consequences()
 					hgvs_obj[hgvs] = obj
-				print("Response collected from VEP for %d - %d" % (x, x + 199))
 			except json.decoder.JSONDecodeError:
 				print("No retrieval for %s" % hgvs)
 
 	hgvs_list = list(hgvs_index.loc[x + 200: x + 200 + r]["HGVS"].values)
 	hgvs_json = json.dumps(hgvs_list)
 
-	try:
-		vep_request = requests.post(server + ext, headers=headers, params=params,
-									data='{ "hgvs_notations" : %s }' % hgvs_json)
+	check_point = 0
+	max_retry = 3
+	while check_point < max_retry:
+		try:
+			vep_request = requests.post(server + ext, headers=headers, params=params,
+										data='{ "hgvs_notations" : %s }' % hgvs_json)
+			if vep_request.status_code == requests.codes.ok:
+				break
 
-	except requests.exceptions.RequestException as e:
-		raise e
+		except requests.exceptions.RequestException as e:
+			# time.sleep(2 ** check_point)
+			check_point += 1
+			if check_point >= max_retry:
+				raise e
 
 	if vep_request.status_code != requests.codes.ok:
 		print("No response from VEP %d - %d" % (x + 200, x + 200 + r))
@@ -1832,7 +1846,6 @@ def retrieve_vep_info(hgvs_df, ensembl_object, uniprot, transcript_id=None):
 			obj.extract_vep_obj(vep_json=whole_vep)
 			obj.extract_consequences()
 			hgvs_obj[hgvs] = obj
-		print("Response collected from VEP for %d - %d" % (x + 200, x + 200 + r))
 
 	for hgvs, obj in hgvs_obj.items():
 		ind = list(hgvs_df[hgvs_df.HGVS == hgvs].index)
@@ -1897,65 +1910,74 @@ def annotate_edits(ensembl_object, vep_df, uniprot_id):
 	uniprot_df["Domain"] = None
 	uniprot_df["curated_Domain"] = None
 	uniprot_df["PTM"] = None
-
+	uniprot = None
 	if uniprot_id is not None:
 		uniprot = uniprot_id
 	else:
-		uniprot = list(vep_df["swissprot_vep"].unique())[0]
+		uniprot_list = [x for x in list(vep_df["swissprot_vep"].unique()) if numpy.isnan(x) is False]
+		if len(uniprot_list) == 1:
+			uniprot = uniprot_list[0]
 
 	ensembl_p = [x for x in list(vep_df["Protein_ID"].unique()) if pandas.isna(x) is not True][0]
 	seq_mapping = ensembl_object.extract_uniprot_info(ensembl_pid=ensembl_p, uniprot=uniprot)
 
 	if seq_mapping:
-		uniprot = uniprot.split(".")[0].split("-")[0]
-		print("Uniprot ID: %s" % uniprot)
-		smap = seq_mapping[uniprot]
-		obj = Uniprot(uniprotid=uniprot)
-		obj.extract_uniprot()
+		if uniprot:
+			if len(uniprot.split(".")) > 1:
+				uniprot = uniprot.split(".")[0].split("-")[0]
+			else:
+				print("Uniprot ID: %s" % uniprot)
 
-		uniprot_df["Protein_Position"] = None
-		for ind, row in uniprot_df.iterrows():
-			ptm, domain, c_domain = None, None, None
-			if row["Protein_Position_ensembl"] is not None and pandas.isna(row["Protein_Position_ensembl"]) is False:
+			smap = seq_mapping[uniprot]
+			obj = Uniprot(uniprotid=uniprot)
+			obj.extract_uniprot()
 
-				# First check if ensembl and uniprot sequences have same indices
-				if len(row["Protein_Position_ensembl"].split(";")) == 1:
-					position = int(row["Protein_Position_ensembl"])
-					if position in smap.keys():
-						uniprot_df.loc[ind, "Protein_Position"] = str(smap[position])
+			uniprot_df["Protein_Position"] = None
+			for ind, row in uniprot_df.iterrows():
+				ptm, domain, c_domain = None, None, None
+				if row["Protein_Position_ensembl"] is not None and pandas.isna(
+						row["Protein_Position_ensembl"]) is False:
 
-				elif len(row["Protein_Position_ensembl"].split(";")) > 1:
-					pos_text_list = list()
-					for position in row["Protein_Position_ensembl"].split(";"):
-						position = int(position)
+					# First check if ensembl and uniprot sequences have same indices
+					if len(row["Protein_Position_ensembl"].split(";")) == 1:
+						position = int(row["Protein_Position_ensembl"])
 						if position in smap.keys():
-							pos_text_list.append(str(smap[position]))
+							uniprot_df.loc[ind, "Protein_Position"] = str(smap[position])
 
-					uniprot_df.loc[ind, "Protein_Position"] = ";".join(pos_text_list)
+					elif len(row["Protein_Position_ensembl"].split(";")) > 1:
+						pos_text_list = list()
+						for position in row["Protein_Position_ensembl"].split(";"):
+							position = int(position)
+							if position in smap.keys():
+								pos_text_list.append(str(smap[position]))
 
-				ptms, domains = list(), list()
-				if uniprot_df.loc[ind, "Protein_Position"] is not None:
-					for position in str(uniprot_df.loc[ind, "Protein_Position"]).split(";"):
-						if position is not None and pandas.isna(
-								position) is False and position != "None" and position != "" and type(
-							position) != float:
-							dom = obj.find_domain(int(position), row["Edited_AA"])
-							phos = obj.find_ptm_site("phosphorylation", int(position), row["Edited_AA"])
-							meth = obj.find_ptm_site("methylation", int(position), row["Edited_AA"])
-							ubi = obj.find_ptm_site("ubiquitination", int(position), row["Edited_AA"])
-							acet = obj.find_ptm_site("acetylation", int(position), row["Edited_AA"])
-							if dom is not None: domains.append(dom + "-" + position)
-							if phos is not None: ptms.append(phos + "-" + position)
-							if meth is not None: ptms.append(meth + "-" + position)
-							if ubi is not None: ptms.append(ubi + "-" + position)
-							if acet is not None: ptms.append(acet + "-" + position)
-				if ptms: ptm = ";".join([i for i in ptms])
-				if domains:
-					domain = ";".join([i for i in domains])
-					c_domain = ";".join(["-".join(i.split("-")[:-1]) for i in domains])
-			uniprot_df.loc[ind, "Domain"] = domain
-			uniprot_df.loc[ind, "curated_Domain"] = c_domain
-			uniprot_df.loc[ind, "PTM"] = ptm
+						uniprot_df.loc[ind, "Protein_Position"] = ";".join(pos_text_list)
+
+					ptms, domains = list(), list()
+					if uniprot_df.loc[ind, "Protein_Position"] is not None:
+						for position in str(uniprot_df.loc[ind, "Protein_Position"]).split(";"):
+							if position is not None and pandas.isna(
+									position) is False and position != "None" and position != "" and type(
+								position) != float:
+								dom = obj.find_domain(int(position), row["Edited_AA"])
+								phos = obj.find_ptm_site("phosphorylation", int(position), row["Edited_AA"])
+								meth = obj.find_ptm_site("methylation", int(position), row["Edited_AA"])
+								ubi = obj.find_ptm_site("ubiquitination", int(position), row["Edited_AA"])
+								acet = obj.find_ptm_site("acetylation", int(position), row["Edited_AA"])
+								if dom is not None: domains.append(dom + "-" + position)
+								if phos is not None: ptms.append(phos + "-" + position)
+								if meth is not None: ptms.append(meth + "-" + position)
+								if ubi is not None: ptms.append(ubi + "-" + position)
+								if acet is not None: ptms.append(acet + "-" + position)
+					if ptms: ptm = ";".join([i for i in ptms])
+					if domains:
+						domain = ";".join([i for i in domains])
+						c_domain = ";".join(["-".join(i.split("-")[:-1]) for i in domains])
+				uniprot_df.loc[ind, "Domain"] = domain
+				uniprot_df.loc[ind, "curated_Domain"] = c_domain
+				uniprot_df.loc[ind, "PTM"] = ptm
+		else:
+			print("No Uniprot ID can be found.)
 	return uniprot_df
 
 
@@ -2317,26 +2339,27 @@ def summarise_guides(last_df):
 	for guide, guide_df in last_df.groupby("CRISPR_PAM_Sequence"):
 
 		summary_df.loc[i, "Hugo_Symbol"] = ";".join(
-			[x for x in list(guide_df.Hugo_Symbol.unique()) if x is not None and pandas.isna(x) is False])
+			[str(x) for x in list(guide_df.Hugo_Symbol.unique()) if x is not None and pandas.isna(x) is False])
 
 		summary_df.loc[i, "CRISPR_PAM_Sequence"] = ";".join(
-			[x for x in list(guide_df.CRISPR_PAM_Sequence.unique()) if x is not None and pandas.isna(x) is False]
+			[str(x) for x in list(guide_df.CRISPR_PAM_Sequence.unique()) if x is not None and pandas.isna(x) is False]
 			if guide_df.CRISPR_PAM_Sequence.unique() is not None else "")
 
 		summary_df.loc[i, "CRISPR_PAM_Location"] = ";".join(
-			[x for x in list(guide_df.CRISPR_PAM_Location.unique()) if x is not None and pandas.isna(x) is False]
+			[str(x) for x in list(guide_df.CRISPR_PAM_Location.unique()) if x is not None and pandas.isna(x) is False]
 			if guide_df.CRISPR_PAM_Location.unique() is not None else "")
 
 		summary_df.loc[i, "gRNA_Target_Sequence"] = ";".join(
-			[x for x in list(guide_df.gRNA_Target_Sequence.unique()) if x is not None and pandas.isna(x) is False]
+			[str(x) for x in list(guide_df.gRNA_Target_Sequence.unique()) if x is not None and pandas.isna(x) is False]
 			if guide_df.gRNA_Target_Sequence.unique() is not None else "")
 
 		summary_df.loc[i, "gRNA_flanking_sequences"] = ";".join(
-			[x for x in list(guide_df.gRNA_flanking_sequences.unique()) if x is not None and pandas.isna(x) is False]
+			[str(x) for x in list(guide_df.gRNA_flanking_sequences.unique()) if
+			 x is not None and pandas.isna(x) is False]
 			if pandas.isna(guide_df.gRNA_flanking_sequences.unique()) is False else "")
 
 		summary_df.loc[i, "gRNA_Target_Location"] = ";".join(
-			[x for x in list(guide_df.gRNA_Target_Location.unique()) if x is not None and pandas.isna(x) is False]
+			[str(x) for x in list(guide_df.gRNA_Target_Location.unique()) if x is not None and pandas.isna(x) is False]
 			if guide_df.gRNA_Target_Location.unique() is not None else "")
 
 		summary_df.loc[i, "Edit_Location"] = ";".join(
@@ -2410,7 +2433,6 @@ def summarise_guides(last_df):
 		summary_df.loc[i, "Protein_Position_ensembl"] = ";".join(
 			[str(x) for x in list(guide_df.Protein_Position_ensembl.unique()) if
 			 x is not None and pandas.isna(x) is False])
-		print(list(guide_df.Protein_Change.unique()))
 		summary_df.loc[i, "Protein_Change"] = ";".join(
 			[x for x in list(guide_df.Protein_Change.unique()) if x is not None and pandas.isna(x) is False])
 
@@ -2830,8 +2852,8 @@ Off target analysis: %s"""
 			file_main_text = "Homo_sapiens.GRCh38.dna.chromosome"
 
 		if "%s.bin" % file_main_text not in os.listdir("%s/genome/" % ot_path):
-			os.system("python3 x_genome.py -pamseq '%s' -assembly '%s' -v_ensembl '%s' -wge_path '%s'"
-					  % (args["PAMSEQ"], args["ASSEMBLY"], args["VERSION"], wge_path))
+			os.system("python3 x_genome.py -pamseq '%s' -assembly '%s' -o '%s' -v_ensembl '%s' -wge_path '%s'"
+					  % (args["PAMSEQ"], args["ASSEMBLY"], path, args["VERSION"], wge_path))
 
 		while "%s.bin" % file_main_text in os.listdir("%s/genome/" % ot_path):
 			time.sleep(20)
@@ -2846,6 +2868,7 @@ Off target analysis: %s"""
 				return True
 			else:
 				print("Off target information cannot be added.")
+
 
 if __name__ == '__main__':
 
