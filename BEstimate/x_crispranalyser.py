@@ -5,12 +5,12 @@
 #                                                                                          #
 # -----------------------------------------------------------------------------------------#
 
-import csv, getopt, psycopg, subprocess, sys, argparse, sqlite3
+import csv, sys, argparse, sqlite3
 import numpy as np
 import pandas as pd
-import time
 import multiprocessing as mp
 import gc
+from crispr_analyser import search, align, utils
 
 ###########################################################################################
 # Functions
