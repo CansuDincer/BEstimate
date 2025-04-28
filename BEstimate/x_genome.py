@@ -105,7 +105,7 @@ def check_genome_exist(assembly, ens_ver):
 		return True
 
 
-def index_genome_wge(assembly, ens_ver, pam_sequence):
+def index_genome(assembly, ens_ver, pam_sequence):
 	global ot_path, wge_path
 	chromosomes = list(range(1, 23)) + ["X", "Y", "MT"]
 
@@ -155,7 +155,7 @@ def index_genome_wge(assembly, ens_ver, pam_sequence):
 		return False
 
 
-def check_index_file(assembly, ens_ver, pam_sequence):
+def check_index_file(assembly, ens_ver):
 	global ot_path, wge_path
 
 	if assembly == "GRCh37":
@@ -193,7 +193,8 @@ def get_genome():
 	except FileExistsError:
 		pass
 
-	is_index = check_index_file(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"], pam_sequence=args["PAMSEQ"])
+
+	is_index = check_index_file(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"])
 
 	if is_index:
 		is_genome = True
@@ -219,7 +220,7 @@ def get_index():
 		return True
 	else:
 		print("Indexing the genome..")
-		res = index_genome_wge(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"], pam_sequence=args["PAMSEQ"])
+		res = index_genome(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"], pam_sequence=args["PAMSEQ"])
 		return res
 
 

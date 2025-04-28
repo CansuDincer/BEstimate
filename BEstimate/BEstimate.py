@@ -104,8 +104,6 @@ def take_input():
 	parser.add_argument("-v_ensembl", dest="VERSION", default="113",
 						help="The ensembl version in which genome will be retrieved "
 							 "(if the assembly is GRCh37 then please use <=75)")
-	parser.add_argument("-wge_path", dest="WGE_PATH", default=os.getcwd() + "../../CRISPR-Analyser",
-						help="The path where the CRISPR Analyser has been installed.")
 
 	parsed_input = parser.parse_args()
 	input_dict = vars(parsed_input)
@@ -2588,12 +2586,12 @@ def run_offtargets(genome, file_name, final_df):
 	"""
 	global ot_path, wge_path
 
-	print("python3 x_crispranalyser.py -c '%s' -b '%s' -o '%s' -p '%s'"
+	print("python3 x_crispranalyser.py -c '%s' -b '%s' -o '%s'"
 		  % (path + file_name + final_df, ot_path + "/genome/" + genome + ".bin",
-			 ot_path + "/wge_files/" + file_name + "_wge_output.csv", wge_path))
-	os.system("python3 x_crispranalyser.py -c '%s' -b '%s' -o '%s' -p '%s'"
+			 ot_path + "/wge_files/" + file_name + "_wge_output.csv"))
+	os.system("python3 x_crispranalyser.py -c '%s' -b '%s' -o '%s'"
 			  % (path + file_name + final_df, ot_path + "/genome/" + genome + ".bin",
-				 ot_path + "/wge_files/" + file_name + "_wge_output.csv", wge_path))
+				 ot_path + "/wge_files/" + file_name + "_wge_output.csv"))
 
 	if "%s_wge_output.csv" % file_name in os.listdir(ot_path + "/wge_files/"):
 		return True
@@ -2835,13 +2833,7 @@ Off target analysis: %s"""
 			pass
 
 		try:
-			os.mkdir(os.getcwd() + "/../offtargets/genome/")
-		except FileExistsError:
-			pass
-
-		try:
 			os.mkdir(os.getcwd() + "/../offtargets/wge_files/")
-			os.mkdir(os.getcwd() + "/../offtargets/genome/csv/")
 
 		except FileExistsError:
 			pass
@@ -2850,13 +2842,6 @@ Off target analysis: %s"""
 			file_main_text = "Homo_sapiens.GRCh37.%s.dna.chromosome" % args["VERSION"]
 		elif args["ASSEMBLY"] == "GRCh38":
 			file_main_text = "Homo_sapiens.GRCh38.dna.chromosome"
-
-		if "%s.bin" % file_main_text not in os.listdir("%s/genome/" % ot_path):
-			os.system("python3 x_genome.py -pamseq '%s' -assembly '%s' -o '%s' -v_ensembl '%s' -wge_path '%s'"
-					  % (args["PAMSEQ"], args["ASSEMBLY"], path, args["VERSION"], wge_path))
-
-		while "%s.bin" % file_main_text in os.listdir("%s/genome/" % ot_path):
-			time.sleep(20)
 
 		if "%s.bin" % file_main_text in os.listdir("%s/genome/" % ot_path):
 			_ = run_offtargets(genome=file_main_text, file_name=args["OUTPUT_FILE"], final_df=final_df)
@@ -2868,6 +2853,8 @@ Off target analysis: %s"""
 				return True
 			else:
 				print("Off target information cannot be added.")
+		else:
+			print("Please download and index your genome file\nRun x_genome.py first.")
 
 
 if __name__ == '__main__':
@@ -2884,12 +2871,6 @@ if __name__ == '__main__':
 		path = args["OUTPUT_PATH"] + "/"
 
 	ot_path = os.getcwd() + "/../offtargets"
-
-	wge_path = ""
-	if args["WGE_PATH"][-1] == "/":
-		wge_path = args["WGE_PATH"]
-	else:
-		wge_path = args["WGE_PATH"] + "/"
 
 	# -----------------------------------------------------------------------------------------#
 	# Data w/out API opportunity
