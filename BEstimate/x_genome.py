@@ -8,6 +8,8 @@
 
 
 import argparse, pandas, os, subprocess, time
+from crispr_analyser import index, gather
+import x_index_db
 
 
 # Extracting Humen Reference Genome
@@ -117,7 +119,7 @@ def index_genome_wge(assembly, ens_ver, pam_sequence):
 	if "%s.bin" % file_main_text not in os.listdir("%s/genome/" % ot_path):
 		chromosome_input_text_list = list()
 		for chromosome in chromosomes:
-			chromosome_input_text_list.append("-i %s/genome/csv/c_%s.csv " % (ot_path, chromosome))
+			chromosome_input_text_list.append("%s/genome/csv/c_%s.csv" % (ot_path, chromosome))
 		chromosome_input_text = " ".join(chromosome_input_text_list)
 
 		# Gather all chromosome fasta files into csv files
@@ -129,10 +131,8 @@ def index_genome_wge(assembly, ens_ver, pam_sequence):
 					os.system("gunzip --keep %s/genome/%s.gz" % (ot_path, file_name))
 
 				print("Chromosome %s" % chromosome)
-				print("python3 x_gather.py -i %s/genome/%s -o %s/genome/csv/c_%s.csv -p %s" % (
-				ot_path, file_name, ot_path, chromosome, pam_sequence))
-				os.system("python3 x_gather.py -i %s/genome/%s -o %s/genome/csv/c_%s.csv -p %s" % (
-				ot_path, file_name, ot_path, chromosome, pam_sequence))
+				gather.gather(inputfile=f"{ot_path}/genome/{file_name}",
+					outputfile=f"{ot_path}/genome/csv/c_{chromosome}.csv", pam=pam_sequence)
 
 				while "c_%s.csv" % (chromosome) not in os.listdir("%s/genome/csv/" % ot_path):
 					print("Waiting chromosome %s.." % chromosome)
@@ -140,14 +140,12 @@ def index_genome_wge(assembly, ens_ver, pam_sequence):
 		print()
 		print("python3 x_index.py %s -d crisprs.db" % chromosome_input_text)
 		os.system("python3 x_index.py %s -d crisprs.db" % chromosome_input_text)
+         index the database with CRISPRs gathered in the CSV files
+		x_index_db.index(chromosome_input_text_list)
 
-		# Index genome
-		print("%sCRISPR-Analyser/bin/crispr_analyser index -a '%s' -s 'Human' -e '1' %s "
-			  "-o '%s/genome/%s.bin'"
-			  % (wge_path, ens_ver, chromosome_input_text, ot_path, file_main_text))
-		os.system("%sCRISPR-Analyser/bin/crispr_analyser index -a '%s' -s 'Human' -e '1' %s "
-				  "-o '%s/genome/%s.bin'"
-				  % (wge_path, ens_ver, chromosome_input_text, ot_path, file_main_text))
+		index.index(inputfiles=chromosome_input_text_list,
+					outputfile=f"{ot_path}/genome/{file_main_text}.bin",
+					species="Human", assembly=ens_ver, offset=0, species_id="1")              
 
 	if "%s.bin" % file_main_text in os.listdir("%s/genome/" % ot_path):
 		return True
