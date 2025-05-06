@@ -138,8 +138,6 @@ def index_genome_wge(assembly, ens_ver, pam_sequence):
 					print("Waiting chromosome %s.." % chromosome)
 					time.sleep(10)
 		print()
-		print("python3 x_index.py %s -d crisprs.db" % chromosome_input_text)
-		os.system("python3 x_index.py %s -d crisprs.db" % chromosome_input_text)
         # index the database with CRISPRs gathered in the CSV files
 		x_index_db.index(chromosome_input_text_list)
 
