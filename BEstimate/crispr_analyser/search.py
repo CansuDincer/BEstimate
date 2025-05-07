@@ -20,8 +20,7 @@ from .utils import (
 def search(
     guides: np.ndarray,
     sequence: str,
-    verbose: bool = False,
-) -> list[int]:
+    verbose: bool = False):
     """Search for a sequence in an indexed binary file
 
     Args:
@@ -38,7 +37,7 @@ def search(
     # the binary index is 0-based,
     # so we add the offset and 1 to make it 1-based as per the db
     # this follows how we numbered the WGE index
-    return [x + 1 for x in indices[0].tolist()]
+    return [int(x) + 1 for x in indices[0].tolist()]
 
 
 def run(argv=sys.argv[1:]) -> None:

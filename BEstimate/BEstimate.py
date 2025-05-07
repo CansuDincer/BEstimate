@@ -2586,10 +2586,10 @@ def run_offtargets(genome, file_name, final_df):
 	"""
 	global ot_path
 
-	print("python3 x_crispranalyser.py -c '%s' -b '%s' -o '%s' -p '%s'"
+	print("python3 x_crispranalyser.py -c '%s' -b '%s' -o '%s'"
 		  % (path + file_name + final_df, ot_path + "/genome/" + genome + ".bin",
 			 ot_path + "/wge_files/" + file_name + "_wge_output.csv"))
-	os.system("python3 x_crispranalyser.py -c '%s' -b '%s' -o '%s' -p '%s'"
+	os.system("python3 x_crispranalyser.py -c '%s' -b '%s' -o '%s'"
 			  % (path + file_name + final_df, ot_path + "/genome/" + genome + ".bin",
 				 ot_path + "/wge_files/" + file_name + "_wge_output.csv"))
 
@@ -2833,13 +2833,7 @@ Off target analysis: %s"""
 			pass
 
 		try:
-			os.mkdir(os.getcwd() + "/../offtargets/genome/")
-		except FileExistsError:
-			pass
-
-		try:
 			os.mkdir(os.getcwd() + "/../offtargets/wge_files/")
-			os.mkdir(os.getcwd() + "/../offtargets/genome/csv/")
 
 		except FileExistsError:
 			pass
@@ -2848,13 +2842,6 @@ Off target analysis: %s"""
 			file_main_text = "Homo_sapiens.GRCh37.%s.dna.chromosome" % args["VERSION"]
 		elif args["ASSEMBLY"] == "GRCh38":
 			file_main_text = "Homo_sapiens.GRCh38.dna.chromosome"
-
-		if "%s.bin" % file_main_text not in os.listdir("%s/genome/" % ot_path):
-			os.system("python3 x_genome.py -pamseq '%s' -assembly '%s' -o '%s' -v_ensembl '%s'"
-					  % (args["PAMSEQ"], args["ASSEMBLY"], path, args["VERSION"]))
-
-		while "%s.bin" % file_main_text in os.listdir("%s/genome/" % ot_path):
-			time.sleep(20)
 
 		if "%s.bin" % file_main_text in os.listdir("%s/genome/" % ot_path):
 			_ = run_offtargets(genome=file_main_text, file_name=args["OUTPUT_FILE"], final_df=final_df)
@@ -2866,6 +2853,8 @@ Off target analysis: %s"""
 				return True
 			else:
 				print("Off target information cannot be added.")
+		else:
+			print("Please download and index your genome file\nRun x_genome.py first.")
 
 
 if __name__ == '__main__':
@@ -2882,7 +2871,6 @@ if __name__ == '__main__':
 		path = args["OUTPUT_PATH"] + "/"
 
 	ot_path = os.getcwd() + "/../offtargets"
-
 
 	# -----------------------------------------------------------------------------------------#
 	# Data w/out API opportunity

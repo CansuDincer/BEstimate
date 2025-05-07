@@ -68,8 +68,8 @@ def sequence_to_binary_encoding(sequence: str, pam_right: int) -> np.uint64:
             bits = ERROR_STR  # set the error flag if we encounter an 'N'
             break
         else:
-            bits <<= 2  # shift left to make room for new char
-            bits |= ENCODING_MAP[character]  # add our new char to the end
+            bits <<= np.uint64(2)  # shift left to make room for new char
+            bits |= np.uint64(ENCODING_MAP[character])  # add our new char to the end
     return bits
 
 
