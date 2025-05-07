@@ -2584,7 +2584,7 @@ def run_offtargets(genome, file_name, final_df):
 	:param file_name: Name of the output file
 	:return:
 	"""
-	global ot_path, wge_path
+	global ot_path
 
 	print("python3 x_crispranalyser.py -c '%s' -b '%s' -o '%s'"
 		  % (path + file_name + final_df, ot_path + "/genome/" + genome + ".bin",
