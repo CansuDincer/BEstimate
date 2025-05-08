@@ -39,7 +39,7 @@ Then, you can run the off target analysis, see below for *BRAF* gene:
 
 ## Contact
 
-BEstimate is the product of Cansu Dinçer, Matthew Coelho and Mathew Garnett from Garnett Group at the Wellcome Sanger Institute.
+BEstimate is the product of Cansu Dinçer, Matthew Coelho and Mathew Garnett from Garnett Group at the Wellcome Sanger Institute. Off-target analysis has been adapted by Bo Fussing from the Cellular Informatics team within the Wellcome Sanger Institute.
 
 For any problems or feedback on BEstimate, you can contact [here](mailto:cd7@sanger.ac.uk).
 
