@@ -210,7 +210,7 @@ def get_index():
 	except FileExistsError:
 		pass
 
-	is_index = check_index_file(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"], pam_sequence=args["PAMSEQ"])
+	is_index = check_index_file(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"])
 
 	if is_index:
 		return True
