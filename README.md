@@ -31,8 +31,9 @@ What you will need:
 - **pamseq** > PAM sequence as the genome will index accordingly
 - **assembly** > The Ensembl genome assembly
 - **v_ensembl** > Ensembl version (currently default is 113 for GRCh38, if the assembly is GRCh37 then please use <=75)
+- **ot_path** > Path for the downloaded genome for the off-target analysis  
 
-`python3 x_genome.py -pamseq NGN -assembly GRCh38 -v_ensembl 113`
+`python3 x_genome.py -pamseq NGN -assembly GRCh38 -v_ensembl 113 -ot_path ../`
 
 Then, you can run the off target analysis, see below for *BRAF* gene:
 `python3 BEstimate.py -gene BRAF -assembly GRCh38 -pamseq NGN -edit A -edit_to G -vep -ot -o ../output/ -ofile BRAF_ABE_NGN`
