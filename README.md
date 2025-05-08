@@ -22,8 +22,9 @@ If you would like to run for a specific transcript and run the protein analysis:
 `python3 BEstimate.py -gene BRAF -assembly GRCh38 -transcript ENST00000646891 -edit C -edit_to T -vep -o ../output/ -ofile BRAF_CBE_NGG`
 
 If you would like to run with a specific point mutation, with NGN PAM and with VEP and protein analysis:
+Prepare a `PIK3CA_mutation_file.txt` for example with 3:g.179218303G>A
 
-`python3 BEstimate.py -gene PIK3CA -assembly GRCh38 -pamseq NGN -pamwin 21-23 -actwin 4-8 -protolen 20 -mutation '3:g.179218303G>A' -edit A -edit_to G -vep -ofile PIK3CA_NGN_ABE_mE545K -o ../output/`
+`python3 BEstimate.py -gene PIK3CA -assembly GRCh38 -pamseq NGN -pamwin 21-23 -actwin 4-8 -protolen 20 -mutation_file PIK3CA_mutation_file.txt -edit A -edit_to G -vep -ofile PIK3CA_NGN_ABE_mE545K -o ../output/`
 
 To run off target analysis, first you need to have *Ensembl* Genome and its indexes for the interested PAM sequence. `x_genome.py` has been prepared for the user to download and index the genome.
 
