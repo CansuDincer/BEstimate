@@ -65,9 +65,6 @@ def take_input():
 						help="The boolean option if user wants to analyse the edits through VEP and Uniprot.")
 
 	# MUTATION INFORMATION
-	parser.add_argument("-mutation", dest="MUTATION", default=None,
-						help="The mutation on the interested gene that you need to integrate "
-							 "into guide and/or annotation analysis")
 	parser.add_argument("-mutation_file", dest="MUTATION_FILE", default=None, type=argparse.FileType('r'),
 						help="If you have more than one mutations, a file for the mutations on the "
 							 "interested gene that you need to integrate into guide and/or annotation analysis")
@@ -358,7 +355,7 @@ class Ensembl:
 			else:
 				for mutation in mutations:
 					print(mutation)
-					if mutation.split(":")[0] == self.chromosome:
+					if int(mutation.split(":")[0]) == int(self.chromosome):
 						if mutation.split(":")[1].split(".")[0] == "g":
 							alteration = mutation.split(":")[1].split(".")[1]
 							mutation_location = int(
@@ -1547,7 +1544,8 @@ def extract_hgvs_df(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 
 						if mutation_edited:
 							for mut in mutations:
-								if re.match("([0-9]+)([a-z]+)", mut.split(">")[0], re.I).groups()[0] == mutation:
+								alteration = mut.split(".")[1]
+								if int(re.match("([0-9]+)([a-z]+)", alteration.split(">")[0], re.I).groups()[0]) == int(edit_loc):
 									ref_nuc = re.match("([0-9]+)([a-z]+)", alteration.split(">")[1], re.I).groups()[0]
 									hgvs = "%s:g.%s%s>%s" \
 										   % (str(chromosome), str(edit_loc), ref_nuc, rev_new_nucleotide)
@@ -1656,7 +1654,8 @@ def extract_hgvs_df(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 
 						if mutation_edited:
 							for mut in mutations:
-								if re.match("([0-9]+)([a-z]+)", mut.split(">")[0], re.I).groups()[0] == mutation:
+								alteration = mut.split(".")[1]
+								if int(re.match("([0-9]+)([a-z]+)", alteration.split(">")[0], re.I).groups()[0]) == int(edit_loc):
 									ref_nuc = re.match("([0-9]+)([a-z]+)", alteration.split(">")[1], re.I).groups()[0]
 									hgvs = "%s:g.%s%s>%s" \
 										   % (str(chromosome), str(edit_loc), ref_nuc, new_nucleotide)
@@ -2635,15 +2634,12 @@ def main():
 	else:
 		transcript = None
 
-	if args["MUTATION"]:
-		mutations = [args["MUTATION"]]
+	if args["MUTATION_FILE"]:
+		mutations = list()
+		for line in args["MUTATION_FILE"].readlines():
+			mutations.append(line.strip())
 	else:
-		if args["MUTATION_FILE"]:
-			mutations = list()
-			for line in args["MUTATION_FILE"].readlines():
-				mutations.append(line.strip())
-		else:
-			mutations = None
+		mutations = None
 
 	print("""
 The given arguments are:\nGene: %s\nAssembl: %s\nEnsembl transcript ID: %s\nUniprot ID: %s\nPAM sequence: %s\nPAM window: %s
@@ -2889,3 +2885,4 @@ if __name__ == '__main__':
 	The BEstimate analysis successfully finished!
 --------------------------------------------------------------
 	\n""")
+

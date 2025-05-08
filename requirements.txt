@@ -1,0 +1,12 @@
+pandas==2.2.3
+argparse==1.1
+requests==2.32.3
+numpy==2.2.5
+biopython==1.85
+multiprocess
+getopts
+supyr-struct
+python-collection
+numba==0.61.2
+dataclasses
+typing
