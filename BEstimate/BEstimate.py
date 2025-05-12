@@ -101,6 +101,7 @@ def take_input():
 	parser.add_argument("-v_ensembl", dest="VERSION", default="113",
 						help="The ensembl version in which genome will be retrieved "
 							 "(if the assembly is GRCh37 then please use <=75)")
+	parser.add_argument("-ot_path", dest="OT_PATH", default=os.getcwd() + "/../offtargets/")
 
 	parsed_input = parser.parse_args()
 	input_dict = vars(parsed_input)
@@ -2586,13 +2587,13 @@ def run_offtargets(genome, file_name, final_df):
 	global ot_path
 
 	print("python3 x_crispranalyser.py -c '%s' -b '%s' -o '%s'"
-		  % (path + file_name + final_df, ot_path + "/genome/" + genome + ".bin",
-			 ot_path + "/wge_files/" + file_name + "_wge_output.csv"))
+		  % (path + file_name + final_df, ot_path + "genome/" + genome + ".bin",
+			 ot_path + "wge_files/" + file_name + "_wge_output.csv"))
 	os.system("python3 x_crispranalyser.py -c '%s' -b '%s' -o '%s'"
-			  % (path + file_name + final_df, ot_path + "/genome/" + genome + ".bin",
-				 ot_path + "/wge_files/" + file_name + "_wge_output.csv"))
+			  % (path + file_name + final_df, ot_path + "genome/" + genome + ".bin",
+				 ot_path + "wge_files/" + file_name + "_wge_output.csv"))
 
-	if "%s_wge_output.csv" % file_name in os.listdir(ot_path + "/wge_files/"):
+	if "%s_wge_output.csv" % file_name in os.listdir(ot_path + "wge_files/"):
 		return True
 	else:
 		print("No alignment - off target")
@@ -2839,7 +2840,7 @@ Off target analysis: %s"""
 		elif args["ASSEMBLY"] == "GRCh38":
 			file_main_text = "Homo_sapiens.GRCh38.dna.chromosome"
 
-		if "%s.bin" % file_main_text in os.listdir("%s/genome/" % ot_path):
+		if "%s.bin" % file_main_text in os.listdir("%sgenome/" % ot_path):
 			_ = run_offtargets(genome=file_main_text, file_name=args["OUTPUT_FILE"], final_df=final_df)
 
 			while args["OUTPUT_FILE"] + "_ot_annotated_df.csv" in os.listdir(path):
@@ -2866,7 +2867,14 @@ if __name__ == '__main__':
 	else:
 		path = args["OUTPUT_PATH"] + "/"
 
-	ot_path = os.getcwd() + "/../offtargets"
+	ot_path = ""
+	if ["OT_PATH"]:
+		if args["OT_PATH"][-1] == "/":
+			ot_path = args["OT_PATH"]
+		else:
+			ot_path = args["OT_PATH"] + "/"
+	else:
+		ot_path = os.getcwd() + "/../offtargets/"
 
 	# -----------------------------------------------------------------------------------------#
 	# Data w/out API opportunity
