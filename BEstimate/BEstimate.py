@@ -2823,7 +2823,6 @@ Off target analysis: %s"""
 		Annotation - Off Target Annotation
 --------------------------------------------------------------
 				\n""")
-
 		try:
 			os.mkdir(os.getcwd() + "/../offtargets")
 		except FileExistsError:
