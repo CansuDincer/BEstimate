@@ -41,6 +41,7 @@ What you will need:
 `python3 x_genome.py -pamseq NGN -assembly GRCh38 -v_ensembl 113 -ot_path ../`
 
 Then, you can run the off target analysis, see below for *BRAF* gene:
+
 `python3 BEstimate.py -gene BRAF -assembly GRCh38 -pamseq NGN -edit A -edit_to G -vep -ot -o ../output/ -ofile BRAF_ABE_NGN`
 
 ## Contact
