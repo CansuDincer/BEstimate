@@ -9,6 +9,7 @@
 
 # Import necessary packages
 import os, sys, pandas, re, argparse, requests, json, itertools, pickle, time, numpy, gzip
+import x_crispranalyser
 from Bio import SeqIO
 from Bio import pairwise2
 from Bio.pairwise2 import format_alignment
@@ -2576,23 +2577,19 @@ def summarise_guides(last_df):
 	return summary_df
 
 
-def run_offtargets(genome, file_name, final_df):
+def run_offtargets(genome: str, file_name: str, final_df: str) -> bool:
 	"""
-	Run mrsfast from python with gRNAs created with BEstimate
-	:param genome: fasta file of the genome
-	:param file_name: Name of the output file
-	:return:
+    Get the offtarget information and output to a detailed and a summary file
 	"""
-	global ot_path
+	print(f"Summary Data Frame was read from {file_name}{final_df}\n")
 
-	print("python3 x_crispranalyser.py -c '%s' -b '%s' -o '%s'"
-		  % (path + file_name + final_df, ot_path + "/genome/" + genome + ".bin",
-			 ot_path + "/wge_files/" + file_name + "_wge_output.csv"))
-	os.system("python3 x_crispranalyser.py -c '%s' -b '%s' -o '%s'"
-			  % (path + file_name + final_df, ot_path + "/genome/" + genome + ".bin",
-				 ot_path + "/wge_files/" + file_name + "_wge_output.csv"))
+	has_off_targets = x_crispranalyser.get_off_targets(
+		input_csv_file=f"{path}{file_name}{final_df}",
+		input_bin_file=f"{ot_path}/genome/{genome}.bin",
+		output_csv_file_base=f"{ot_path}/wge_files/{file_name}",
+		)
 
-	if "%s_wge_output.csv" % file_name in os.listdir(ot_path + "/wge_files/"):
+	if has_off_targets:
 		return True
 	else:
 		print("No alignment - off target")
@@ -2701,7 +2698,7 @@ Off target analysis: %s"""
 		print("CRISPR Data Frame was written in %s as %s\n" % (path, args["OUTPUT_FILE"] + "_crispr_df.csv"))
 
 	else:
-		print("CRISPR Data Frame was readed from %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_crispr_df.csv"))
+		print("CRISPR Data Frame was read from %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_crispr_df.csv"))
 		crispr_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_crispr_df.csv")
 	print("""\n
 --------------------------------------------------------------
@@ -2723,7 +2720,7 @@ Off target analysis: %s"""
 		print("Edit Data Frame was written in %s as %s" % (path, args["OUTPUT_FILE"] + "_edit_df.csv\n"))
 
 	else:
-		print("Edit Data Frame was readed from %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_edit_df.csv"))
+		print("Edit Data Frame was read from %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_edit_df.csv"))
 		edit_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_edit_df.csv")
 
 	if args["VEP"]:
@@ -2759,7 +2756,7 @@ Off target analysis: %s"""
 				else:
 					print("VEP Data Frame cannot be created because it is empty!")
 		else:
-			print("VEP Data Frame was readed from %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_vep_df.csv"))
+			print("VEP Data Frame was read from %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_vep_df.csv"))
 			whole_vep_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_vep_df.csv")
 
 		print("""\n
@@ -2788,7 +2785,7 @@ Off target analysis: %s"""
 			else:
 				print("Protein Data Frame cannot be created because it is empty.")
 		else:
-			print("Protein Data Frame was readed from %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_protein_df.csv"))
+			print("Protein Data Frame was read from %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_protein_df.csv"))
 			protein_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_protein_df.csv")
 
 		if len(protein_df.index) > 0:
@@ -2807,7 +2804,7 @@ Off target analysis: %s"""
 
 			else:
 				print(
-					"Summary Data Frame was readed from %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_summary_df.csv"))
+					"Summary Data Frame was read from %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_summary_df.csv"))
 				summary_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_summary_df.csv")
 				final_df = "_summary_df.csv"
 		else:
