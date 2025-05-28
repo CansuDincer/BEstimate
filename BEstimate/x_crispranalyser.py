@@ -12,7 +12,6 @@ import sqlite3
 import sys
 import time
 from crispr_analyser import search, align, utils
-from multiprocessing import Pool, cpu_count
 
 ##############################################################################
 # Functions
@@ -46,7 +45,7 @@ def fetch_crispr_cursor(crispr_ids: list[int], cur: sqlite3.Cursor) -> sqlite3.C
 def usage() -> None:
     print(
         "x_crispranalyser.py -c <input_csv_file> -b <input_bin_file> "
-        "-o <output_csv_file>"
+        "-o <output_csv_file_base>"
     )
 
 
@@ -62,7 +61,7 @@ def get_ots_for_row(row, guides):
     # find the off-target summary for the CRISPR
     binary_sequence = utils.sequence_to_binary_encoding(sequence, 1)
     binary_reverse_sequence = align.reverse_complement_binary(binary_sequence, 20)
-    summary, _off_target_ids = align.find_off_targets(
+    summary, _ = align.find_off_targets(
         guides, binary_sequence, binary_reverse_sequence
     )
     cursor = fetch_crispr_cursor(crispr_ids, cur)
@@ -84,9 +83,10 @@ def get_ots_for_row(row, guides):
 
 
 def get_off_targets(
-    input_bin_file: str, input_csv_file: str, output_csv_file: str
-) -> None:
-    """Generate off-target summaries for a given input file and binary guides file"""
+    input_bin_file: str, input_csv_file: str, output_csv_file_base: str
+) -> bool:
+    """Generate off-target summaries and details files for a given input  and binary guides file"""
+    start = time.time()
     with open(input_bin_file, "rb") as guides_file:
         # check that the binary guides file is valid
         utils.check_file_header(guides_file.read(utils.HEADER_SIZE))
@@ -95,10 +95,9 @@ def get_off_targets(
         details = list()
         summaries = list()
         details = list()
-        results = list()
         with open(input_csv_file, "r") as input_csvfile:
             csvreader = csv.DictReader(input_csvfile)
-            headers = csvreader.fieldnames
+            headers = csvreader.fieldnames or list()
             details_headers = [
                 "CRISPR_sequence",
                 "Chromosome",
@@ -107,54 +106,41 @@ def get_off_targets(
                 "Off_target_summary",
             ]
             summaries_headers = ["exact", "mm1", "mm2", "mm3", "mm4"]
-            pool = Pool(processes=min(2, cpu_count()))
             for row in csvreader:
-                result = pool.apply_async(
-                    get_ots_for_row,
-                    args=(
-                        row,
-                        guides,
-                    ),
-                )
-                results.append(result)
-            for res in results:
-                try:
-                    output_details, output_summary = res.get()
-                    details += output_details
-                    summaries.append(output_summary)
-                except Exception as e:
-                    print(f"Error processing row: {e}")
-            pool.close()
-            pool.join()
+                output_details, output_summary = get_ots_for_row(row, guides)
+                details = [*details, *output_details]
+                summaries.append(output_summary)
         with open(
-            f"{output_csv_file}_ot_annotated_df.csv", "w"
+            f"{output_csv_file_base}_ot_annotated_df.csv", "w"
         ) as output_csvfile_summaries:
             csv_summaries_writer = csv.DictWriter(
-                output_csvfile_summaries, fieldnames=headers + summaries_headers
+                output_csvfile_summaries, fieldnames=[*headers, *summaries_headers]
             )
             csv_summaries_writer.writeheader()
             csv_summaries_writer.writerows(summaries)
-        with open(f"{output_csv_file}wge_return.csv", "w") as output_csvfile_details:
+        with open(
+            f"{output_csv_file_base}_wge_return.csv", "w"
+        ) as output_csvfile_details:
             csv_details_writer = csv.DictWriter(
-                output_csvfile_details, fieldnames=headers + details_headers
+                output_csvfile_details, fieldnames=[*headers, *details_headers]
             )
             csv_details_writer.writeheader()
             csv_details_writer.writerows(details)
+            print(f"off-targets calculation total time: {time.time() - start}")
+        return len(details) > 0
 
 
-def run():
+def run() -> None:
     """Run the off-targets search from the command line."""
     args = take_input()
     input_csv_file = args["I_CSV"]
     input_bin_file = args["BIN"]
-    output_csv_file = args["O_CSV"]
+    output_csv_file_base = args["O_CSV"]
 
-    if input_csv_file == "" or input_bin_file == "" or output_csv_file == "":
+    if input_csv_file == "" or input_bin_file == "" or output_csv_file_base == "":
         sys.exit(2)
 
-    start_time = time.time()
-    get_off_targets(input_bin_file, input_csv_file, output_csv_file)
-    print(f"Finished processing off-targets: {time.time() - start_time}")
+    get_off_targets(input_bin_file, input_csv_file, output_csv_file_base)
 
 
 if __name__ == "__main__":
