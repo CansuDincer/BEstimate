@@ -15,7 +15,9 @@ If not, you should have python 3.13 and you can use requirements file:
 
 ## Run BEstimate
 
-`python3 BEstimate.py -gene BRCA1 -assembly GRCh38 -pamseq NGG -pamwin 21-23 -actwin 4-8 -protolen 20 -edit C -edit_to T -o ../output/ -ofile BRCA1_CBE_NGG`
+```bash
+python3 BEstimate.py -gene BRCA1 -assembly GRCh38 -pamseq NGG -pamwin 21-23 -actwin 4-8 -protolen 20 -edit C -edit_to T -o ../output/ -ofile BRCA1_CBE_NGG
+```
 
 The user also run the same analysis for different PAM only changing -pamseq NGN. 
 
@@ -23,25 +25,44 @@ The user also run the same analysis for different PAM only changing -pamseq NGN.
 
 If you would like to run for a specific transcript and run the protein analysis:
 
-`python3 BEstimate.py -gene BRAF -assembly GRCh38 -transcript ENST00000646891 -edit C -edit_to T -vep -o ../output/ -ofile BRAF_CBE_NGG`
+```bash
+python3 BEstimate.py -gene BRAF -assembly GRCh38 -transcript ENST00000646891 -edit C -edit_to T -vep -o ../output/ -ofile BRAF_CBE_NGG
+```
 
 If you would like to run with a specific point mutation, with NGN PAM and with VEP and protein analysis:
 Prepare a `PIK3CA_mutation_file.txt` for example with 3:g.179218303G>A
 
-`python3 BEstimate.py -gene PIK3CA -assembly GRCh38 -pamseq NGN -pamwin 21-23 -actwin 4-8 -protolen 20 -mutation_file PIK3CA_mutation_file.txt -edit A -edit_to G -vep -ofile PIK3CA_NGN_ABE_mE545K -o ../output/`
+```bash
+python3 BEstimate.py -gene PIK3CA -assembly GRCh38 -pamseq NGN -pamwin 21-23 -actwin 4-8 -protolen 20 -mutation_file PIK3CA_mutation_file.txt -edit A -edit_to G -vep -ofile PIK3CA_NGN_ABE_mE545K -o ../output/
+```
 
-To run off target analysis, first you need to have *Ensembl* Genome and its indexes for the interested PAM sequence. `x_genome.py` has been prepared for the user to download and index the genome.
+To run the off target analysis, first you need to have the [Ensembl](https://www.ensembl.org/) Genome indexed for the interested PAM sequence. 
+The `x_genome.py` script will download the required files and index the genome.
 
-What you will need:
-- **pamseq** > PAM sequence as the genome will index accordingly
-- **assembly** > The Ensembl genome assembly
-- **v_ensembl** > Ensembl version (currently default is 113 for GRCh38, if the assembly is GRCh37 then please use <=75)
-- **ot_path** > Path for the downloaded genome for the off-target analysis  
+to run the **x_genome.py** script:
 
-`python3 x_genome.py -pamseq NGN -assembly GRCh38 -v_ensembl 113 -ot_path ../`
+```bash
+python3 x_genome.py -pamseq <PAM sequence> -assembly <genome assembly> -o <output directory> -v_ensembl <assembly version> -ot_path <off-targets path>
+```
+
+The parameters are:
+- *-pamseq* - the PAM sequence that will be used for indexing CRISPRs e.g. "NGG" - *Required*,
+- *-assembly* - the human reference genome targeted, "GRCh37" or "GRCh38" - *Required*,
+- *-o* - the output directory, if not specified will use the current directory - *Optional*,
+- *-v_ensembl* - the Ensembl version of the genome being indexed (currently default is 113 for GRCh38, if using GRCh37 the please use <=75) - *Required*,
+- *-ot_path* - path for the downloaded genome for the off-target analysis, defaults to "../offtargets" - *Optional*
+
+for example:
+
+```bash
+python3 x_genome.py -pamseq NGN -assembly GRCh38 -v_ensembl 113 -ot_path ../
+```
 
 Then, you can run the off target analysis, see below for *BRAF* gene:
-`python3 BEstimate.py -gene BRAF -assembly GRCh38 -pamseq NGN -edit A -edit_to G -vep -ot -o ../output/ -ofile BRAF_ABE_NGN`
+
+```bash
+python3 BEstimate.py -gene BRAF -assembly GRCh38 -pamseq NGN -edit A -edit_to G -vep -ot -o ../output/ -ofile BRAF_ABE_NGN`
+```
 
 ## Contact
 
