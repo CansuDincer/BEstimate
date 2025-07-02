@@ -1,247 +1,417 @@
-# -----------------------------------------------------------------------------------------#
-#                                                                                          #
-#                                  B E s t i m a t e                                       #
-#                           Genome Retrieval and Indexing                                  #
-#                        Author : Cansu Dincer cd7@sanger.ac.uk                            #
-#                                                                                          #
-# -----------------------------------------------------------------------------------------#
+# -----------------------------------------------------------------------------#
+#                                                                              #
+#                              B E s t i m a t e                               #
+#                        Genome Retrieval and Indexing                         #
+#                    Author : Cansu Dincer cd7@sanger.ac.uk                    #
+#                    Copyright (C) 2025 Genome Research Ltd.                   #
+#                                                                              #
+# -----------------------------------------------------------------------------#
 
-
-import argparse, pandas, os, subprocess, time
+import argparse
+import os
+import requests
+import shutil
+import subprocess
+import sys
 from crispr_analyser import index, gather
-import x_index_db
+
+CHROMOSOMES = list(range(1, 23)) + ["X", "Y", "MT"]
+
+# Extracting CRISPRs from the Humen Reference Genome
+
+###############################################################################
+# capture command line arguments
 
 
-# Extracting Humen Reference Genome
+def take_input() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="x_genome.py",
+        description="Script for indexing CRISPRs for finding off-targets",
+        usage="%(prog)s [inputs]",
+    )
+    parser.add_argument(
+        "--pamseq",
+        "-p",
+        default="NGG",
+        required=False,
+        help="The PAM sequence in which features used "
+        "for searching activity window and editable nucleotide.",
+    )
+    parser.add_argument(
+        "--assembly",
+        "-a",
+        default="GRCh38",
+        choices=["GRCh38", "GRCh37"],
+        required=False,
+        help="The genome assembly that will be used!",
+    )
+    parser.add_argument(
+        "--output_path",
+        "-o",
+        default=f"{os.getcwd()}/",
+        required=False,
+        help="The path for output. If not specified the current directory "
+        "will be used!",
+    )
+    parser.add_argument(
+        "--ensembl_version",
+        "-e",
+        default="113",
+        required=False,
+        help="The ensembl version in which genome will be retrieved "
+        "(if the assembly is GRCh37 then please use <=75)",
+    )
+    parser.add_argument(
+        "--offtargets_path",
+        "-ot",
+        default=f"{os.getcwd()}/../offtargets",
+        required=False,
+        help="The path to the root offtargets output directory",
+    )
+    return parser.parse_args()
 
-###########################################################################################
-# Take inputs
 
-def take_input():
-	parser = argparse.ArgumentParser(prog="BEstimate - Genome",
-									 usage="%(prog)s [inputs]")
-
-	for group in parser._action_groups:
-		if group.title == "optional arguments":
-			group.title = "Inputs"
-		elif "positional arguments":
-			group.title = "Mandatory Inputs"
-
-	parser.add_argument("-pamseq", dest="PAMSEQ", default="NGG",
-						help="The PAM sequence in which features used "
-							 "for searching activity window and editable nucleotide.")
-
-	parser.add_argument("-assembly", dest="ASSEMBLY", default="GRCh38",
-						help="The genome assembly that will be used!")
-
-	parser.add_argument("-o", dest="OUTPUT_PATH", default=os.getcwd() + "/",
-						help="The path for output. If not specified the current directory will be used!")
-
-	parser.add_argument("-v_ensembl", dest="VERSION", default="113",
-						help="The ensembl version in which genome will be retrieved "
-							 "(if the assembly is GRCh37 then please use <=75)")
-
-	parser.add_argument("-ot_path", dest="OT_PATH", default=os.getcwd() + "/../offtargets")
-
-	parsed_input = parser.parse_args()
-	input_dict = vars(parsed_input)
-
-	return input_dict
-
-
-###########################################################################################
+##############################################################################
 # Functions
 
-def check_genome_exist(assembly, ens_ver):
-	global ot_path
-	chromosomes = list(range(1, 23)) + ["X", "Y", "MT"]
 
-	if assembly == "GRCh37":
-		file_main_text = "Homo_sapiens.GRCh37.%s.dna.chromosome" % ens_ver
-	elif assembly == "GRCh38":
-		file_main_text = "Homo_sapiens.GRCh38.dna.chromosome"
-
-	check_files = True
-	for chromosome in chromosomes:
-		if "%s.%s.fa.gz" % (file_main_text, chromosome) not in os.listdir(ot_path + "genome/"):
-			check_files = False
-
-	if check_files is False:
-
-		print(
-			"Genome is not found, BEstimate is downloading the %s Ensembl genome - version %s\n" % (assembly, ens_ver))
-
-		if "chromosome_ftps.txt" not in os.listdir("%sgenome/" % ot_path):
-			f = open("%sgenome/chromosome_ftps.txt" % ot_path, "w")
-			for chromosome in chromosomes:
-				f.writelines(
-					"url=https://ftp.ensembl.org/pub/release-%s/fasta/homo_sapiens/dna/%s.%s.fa.gz\n" % (
-						ens_ver, file_main_text, chromosome))
-				f.writelines(
-					"output=%sgenome/%s.%s.fa.gz\n" % (ot_path, file_main_text, chromosome))
-			f.close()
-
-		curl_command = "curl --parallel --parallel-immediate --parallel-max 25 --fail-with-body --retry 5 " \
-					   "--config %sgenome/chromosome_ftps.txt -C -" % ot_path
-		print("Collecting the genome files from Ensembl FTP..\n")
-
-		_ = subprocess.Popen(curl_command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-							 text=True, shell=True)
-
-		check_files = True
-		for chromosome in chromosomes:
-			if "%s.%s.fa.gz" % (file_main_text, chromosome) not in os.listdir(ot_path + "genome/"):
-				check_files = False
-
-		error_message = "Error in downloading genome, please manually downloading all chromosomes from:" \
-						"https://ftp.ensembl.org/pub/release-%s/fasta/homo_sapiens/dna/ named as " \
-						"Homo_sapiens.GRCh38.dna.chromosome.<chromosome>.fa.gz if the assembl is GRCh38, otherwise" \
-						"Homo_sapiens.GRCh37.<version>.dna.chromosome.<chromosome>.fa.gz"
-
-		if check_files:
-			return True
-		else:
-			return error_message
-	else:
-		return True
+def base_file_name(assembly: str, ensembl_version: str) -> str:
+    """Generate the base file name"""
+    name = ""
+    if assembly == "GRCh37":
+        name = "Homo_sapiens.GRCh37.%s" % ensembl_version
+    elif assembly == "GRCh38":
+        name = "Homo_sapiens.GRCh38"
+    return name
 
 
-def index_genome(assembly, ens_ver, pam_sequence):
-	global ot_path
-	chromosomes = list(range(1, 23)) + ["X", "Y", "MT"]
-
-	if assembly == "GRCh37":
-		file_main_text = "Homo_sapiens.GRCh37.%s.dna.chromosome" % ens_ver
-	elif assembly == "GRCh38":
-		file_main_text = "Homo_sapiens.GRCh38.dna.chromosome"
-
-	if "%s.bin" % file_main_text not in os.listdir("%sgenome/" % ot_path):
-		chromosome_input_text_list = list()
-		for chromosome in chromosomes:
-			chromosome_input_text_list.append("%sgenome/csv/c_%s.csv" % (ot_path, chromosome))
-
-
-		# Gather all chromosome fasta files into csv files
-		print("Gathering chromosomes..\n")
-		for chromosome in chromosomes:
-			file_name = "%s.%s.fa" % (file_main_text, chromosome)
-			if "c1_%s.csv" % chromosome not in os.listdir("%sgenome/csv/" % ot_path):
-				if file_name not in os.listdir("%sgenome/" % ot_path):
-					os.system("gunzip --keep %sgenome/%s.gz" % (ot_path, file_name))
-
-				print("Chromosome %s" % chromosome)
-				gather.gather(inputfile=f"{ot_path}genome/{file_name}",
-					outputfile=f"{ot_path}genome/csv/c_{chromosome}.csv", pam=pam_sequence)
-
-				while "c_%s.csv" % chromosome not in os.listdir("%sgenome/csv/" % ot_path):
-					print("Waiting chromosome %s.." % chromosome)
-					time.sleep(10)
-		print()
-		# index the database with CRISPRs gathered in the CSV files
-		x_index_db.index(chromosome_input_text_list)
-
-		index.index(inputfiles=chromosome_input_text_list,
-					outputfile=f"{ot_path}genome/{file_main_text}.bin",
-					species="Human", assembly=ens_ver, offset=0, species_id="1")
-
-	if "%s.bin" % file_main_text in os.listdir("%sgenome/" % ot_path):
-		return True
-	else:
-		return False
+def check_genome_files_exist(
+    assembly: str, ensembl_version: str, ot_path: str
+) -> bool:
+    """Check to see if the genome FASTA files have been dowloaded."""
+    file_directory = f"{ot_path}/genome_files"
+    if os.path.exists(file_directory) is False:
+        return False
+    files_exist = True
+    base_name = base_file_name(
+        assembly=assembly, ensembl_version=ensembl_version
+    )
+    for chromosome in CHROMOSOMES:
+        file_name = "%s.dna.chromosome.%s.fa.gz" % (base_name, chromosome)
+        if file_name not in os.listdir(file_directory):
+            files_exist = False
+    return files_exist
 
 
-def check_index_file(assembly, ens_ver):
-	global ot_path
+def fetch_genome_files(
+    assembly: str, ensembl_version: str, ot_path: str
+) -> None:
+    """Download the genome FASTA files from Ensembl"""
+    print(
+        "Genome assembly is not found, BEstimate is downloading "
+        "the %s Ensembl genome - version %s\n" % (assembly, ensembl_version)
+    )
+    try:
+        os.mkdir(f"{ot_path}/genome_files")
+    except FileExistsError:
+        pass
 
-	if assembly == "GRCh37":
-		file_main_text = "Homo_sapiens.GRCh37.%s.dna.chromosome" % ens_ver
-	elif assembly == "GRCh38":
-		file_main_text = "Homo_sapiens.GRCh38.dna.chromosome"
+    file_name = base_file_name(
+        assembly=assembly, ensembl_version=ensembl_version
+    )
 
-	if "%s.bin" % file_main_text not in os.listdir("%sgenome/" % ot_path):
-		return False
+    base_url = (
+        "https://ftp.ensembl.org/pub/release-%s/fasta/homo_sapiens/dna"
+        % ensembl_version
+    )
+    for chromosome in CHROMOSOMES:
+        url = f"{base_url}/{file_name}.dna.chromosome.{chromosome}.fa.gz"
+        response = requests.get(url)
+        file_path = "%s/genome_files/%s.dna.chromosome.%s.fa.gz" % (
+            ot_path,
+            file_name,
+            chromosome,
+        )
 
-	else:
-		if "crisprs.db" in os.listdir(os.getcwd()):
-			return True
-		else:
-			return False
+        if response.status_code == 200:
+            with open(file_path, "wb") as file:
+                file.write(response.content)
+        else:
+            print(f"failed to download {url}")
 
 
-###########################################################################################
+def gather_crisprs_from_genome(
+    assembly: str, ensembl_version: str, pam_sequence: str, ot_path: str
+) -> None:
+    """Gather CRISPRs from the FASTA files and generate gRNA binary index"""
+    file_name = base_file_name(
+        assembly=assembly, ensembl_version=ensembl_version
+    )
+    try:
+        os.mkdir(f"{ot_path}/crispr_csv")
+    except FileExistsError:
+        pass
+
+    # Gather all chromosome fasta files into csv files
+    print(
+        "From genome assembly FASTA files gathering CRISPRs "
+        "in chromosomes into CSVs.."
+    )
+    sequence_start = 0
+    for chromosome in CHROMOSOMES:
+        print("Chromosome %s" % chromosome)
+        genome_file = "%s.dna.chromosome.%s.fa" % (file_name, chromosome)
+        subprocess.run(
+            [
+                "gunzip",
+                "--keep",
+                f"{ot_path}/genome_files/{genome_file}.gz",
+            ]
+        )
+        sequence_start = gather.gather(
+            inputfile=f"{ot_path}/genome_files/{genome_file}",
+            outputfile="%s/crispr_csv/%s.chromosome.%s.%s.csv"
+            % (ot_path, file_name, chromosome, pam_sequence),
+            pam=pam_sequence,
+            sequence_start=sequence_start,
+        )
+
+    try:
+        os.mkdir(f"{ot_path}/grna_bin")
+    except FileExistsError:
+        pass
+
+    # create binary index file of CRISPRs
+    print("\nCreating binary index of gRNAs from CSVs...")
+    chromosome_input_text_list = list()
+    for chromosome in CHROMOSOMES:
+        chromosome_input_text_list.append(
+            "%s/crispr_csv/%s.chromosome.%s.%s.csv"
+            % (ot_path, file_name, chromosome, pam_sequence)
+        )
+    index.index(
+        inputfiles=chromosome_input_text_list,
+        outputfile=f"{ot_path}/grna_bin/{file_name}.{pam_sequence}.bin",
+        species="Human",
+        assembly=ensembl_version,
+        offset=0,
+        species_id=1,
+    )
+    print("CRISPRs indexed\n")
+
+
+def init_db(db_file: str, ot_path: str) -> None:
+    """Initialise the SQLite database with the crisprs table."""
+    try:
+        os.mkdir(f"{ot_path}/crispr_db")
+    except FileExistsError:
+        pass
+    print("Creating CRISPR database...")
+    subprocess.run(
+        [
+            "sqlite3",
+            f"{ot_path}/crispr_db/{db_file}",
+            "CREATE TABLE IF NOT EXISTS crisprs (id INT NOT NULL PRIMARY KEY, "
+            "chr_name TEXT NOT NULL, chr_start INT NOT NULL, "
+            "seq TEXT NOT NULL, "
+            "pam_right INT NOT NULL CHECK (pam_right in (0, 1)))",
+        ]
+    )
+
+
+def import_crisprs_to_db(
+    assembly: str, ensembl_version: str, pam_sequence: str, ot_path: str
+) -> None:
+    """Import CRISPRs in CSVs into the 'crisprs' table"""
+    # Check to see if sqlite3 is available
+    if shutil.which("sqlite3") is None:
+        sys.exit("please install sqlite3 before proceeding")
+
+    file_name = base_file_name(
+        assembly=assembly, ensembl_version=ensembl_version
+    )
+    db_file = f"{file_name}.{pam_sequence}.db"
+
+    # index the database with CRISPRs gathered in the CSV files
+    init_db(db_file=db_file, ot_path=ot_path)
+    print("Importing CRISPR data to db...")
+    for chromosome in CHROMOSOMES:
+        print(
+            "importing %s.chromosome.%s.%s.csv"
+            % (
+                file_name,
+                chromosome,
+                pam_sequence,
+            )
+        )
+        subprocess.run(
+            [
+                "sqlite3",
+                "%s/crispr_db/%s" % (ot_path, db_file),
+                ".import --csv %s/crispr_csv/%s.chromosome.%s.%s.csv crisprs"
+                % (ot_path, file_name, chromosome, pam_sequence),
+            ]
+        )
+    print("CRISPR data imported\n")
+
+
+def check_grna_bin_exists(
+    assembly: str, ensembl_version: str, pam_sequence: str, ot_path: str
+) -> bool:
+    """Check to see if gRNA binary index file exists"""
+    file_path = f"{ot_path}/grna_bin"
+    if os.path.exists(file_path) is False:
+        return False
+    file_name = base_file_name(
+        assembly=assembly, ensembl_version=ensembl_version
+    )
+    if "%s.%s.bin" % (file_name, pam_sequence) not in os.listdir(file_path):
+        return False
+    else:
+        return True
+
+
+def check_crispr_db_exists(
+    assembly: str, ensembl_version: str, pam_sequence: str, ot_path: str
+) -> bool:
+    """Check to see if CRISPR SQLite database file exists"""
+    file_name = base_file_name(
+        assembly=assembly, ensembl_version=ensembl_version
+    )
+    db_file = f"{file_name}.{pam_sequence}.db"
+    return os.path.exists(f"{ot_path}/crispr_db/{db_file}")
+
+
+def check_crispr_csvs_exist(
+    assembly: str, ensembl_version: str, pam_sequence: str, ot_path: str
+) -> bool:
+    """Check to see if all the indexed CRISPR csv files exist"""
+    file_name = base_file_name(
+        assembly=assembly, ensembl_version=ensembl_version
+    )
+    file_path = f"{ot_path}/crispr_csv"
+    if os.path.exists(file_path) is False:
+        return False
+    files_exist = True
+    for chromosome in CHROMOSOMES:
+        if (
+            f"{file_name}.chromosome.{chromosome}.{pam_sequence}.csv"
+            not in os.listdir(file_path)
+        ):
+            files_exist = False
+    return files_exist
+
+
+def check_crispr_indexes_exist(
+    assembly: str, ensembl_version: str, pam_sequence: str, ot_path: str
+) -> bool:
+    """Check to see if both gRNA index and CRISPR CSVs exist"""
+    return check_grna_bin_exists(
+        assembly=assembly,
+        ensembl_version=ensembl_version,
+        pam_sequence=pam_sequence,
+        ot_path=ot_path,
+    ) & check_crispr_csvs_exist(
+        assembly=assembly,
+        ensembl_version=ensembl_version,
+        pam_sequence=pam_sequence,
+        ot_path=ot_path,
+    )
+
+
+################################################################################
 # Execution
 
 
-def get_genome():
-	"""
-	Run whole script with the input from terminal
-	:return:
-	"""
+def run(assembly: str, ensembl_version: str, pam_sequence: str, ot_path: str):
+    """Run all CRISPR and gRNA indexing from genome assembly FASTA files"""
+    if os.path.exists(ot_path) is False:
+        os.mkdir(ot_path)
+    # Check if we have downloaded the genome files already
+    if (
+        check_genome_files_exist(
+            assembly=assembly,
+            ensembl_version=ensembl_version,
+            ot_path=ot_path,
+        )
+        is False
+    ):
+        fetch_genome_files(
+            assembly=assembly,
+            ensembl_version=ensembl_version,
+            ot_path=ot_path,
+        )
+        if (
+            check_genome_files_exist(
+                assembly=assembly,
+                ensembl_version=ensembl_version,
+                ot_path=ot_path,
+            )
+            is False
+        ):
+            sys.exit(
+                "Error in downloading genome, please manually download all "
+                "chromosomes from: "
+                "https://ftp.ensembl.org/pub/release-%s/fasta/homo_sapiens/dna/"
+                " named Homo_sapiens.GRCh38.dna.chromosome.<chromosome>.fa.gz "
+                "if the assembly is GRCh38, otherwise "
+                "Homo_sapiens.GRCh37.<version>"
+                ".dna.chromosome.<chromosome>.fa.gz"
+            )
+    else:
+        print("Genome FASTA files exist - nothing to be done")
 
-	try:
-		os.mkdir(ot_path)
-	except FileExistsError:
-		pass
-
-	try:
-		os.mkdir(ot_path + "genome/")
-	except FileExistsError:
-		pass
-
-
-	is_index = check_index_file(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"])
-
-	if is_index:
-		is_genome = True
-	else:
-		is_genome = check_genome_exist(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"])
-
-	if is_genome:
-		return True
-	else:
-		print("Error: Please download the Humen Reference Genome from Ensembl before continue!")
-		return False
-
-
-def get_index():
-	try:
-		os.mkdir(ot_path + "genome/csv/")
-	except FileExistsError:
-		pass
-
-	is_index = check_index_file(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"])
-
-	if is_index:
-		return True
-	else:
-		print("Indexing the genome..")
-		res = index_genome(assembly=args["ASSEMBLY"], ens_ver=args["VERSION"], pam_sequence=args["PAMSEQ"])
-		return res
+    if (
+        check_crispr_indexes_exist(
+            assembly=assembly,
+            ensembl_version=ensembl_version,
+            pam_sequence=pam_sequence,
+            ot_path=ot_path,
+        )
+        is False
+    ):
+        gather_crisprs_from_genome(
+            assembly=assembly,
+            ensembl_version=ensembl_version,
+            pam_sequence=pam_sequence,
+            ot_path=ot_path,
+        )
+    else:
+        print("CRISPR CSV files exist - nothing to be done")
+    if (
+        check_crispr_db_exists(
+            assembly=assembly,
+            ensembl_version=ensembl_version,
+            pam_sequence=pam_sequence,
+            ot_path=ot_path,
+        )
+        is False
+    ):
+        import_crisprs_to_db(
+            assembly=assembly,
+            ensembl_version=ensembl_version,
+            pam_sequence=pam_sequence,
+            ot_path=ot_path,
+        )
+    else:
+        print("CRISPR database exists - nothing to be done")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
+    # -------------------------------------------------------------------------#
+    # Retrieve command line arguments
+    args = take_input()
 
-	# -----------------------------------------------------------------------------------------#
-	# Retrieve input
+    # Off-targets Path (without trailing backslash)
+    ot_path = (
+        args.offtargets_path
+        if args.offtargets_path[-1] != "/"
+        else args.offtargets_path[:-1]
+    )
 
-	args = take_input()
-	# Output Path
-	path = ""
-	if args["OUTPUT_PATH"][-1] == "/":
-		path = args["OUTPUT_PATH"]
-	else:
-		path = args["OUTPUT_PATH"] + "/"
-
-	ot_path = ""
-	if args["OT_PATH"][-1] == "/":
-		ot_path = args["OT_PATH"]
-	else:
-		ot_path = args["OT_PATH"] + "/"
-
-	g = get_genome()
-	if g:
-		get_index()
-
-	else:
-		print("no index")
-
+    run(
+        assembly=args.assembly,
+        ensembl_version=args.ensembl_version,
+        pam_sequence=args.pamseq,
+        ot_path=ot_path,
+    )

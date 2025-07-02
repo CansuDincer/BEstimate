@@ -36,32 +36,42 @@ Prepare a `PIK3CA_mutation_file.txt` for example with 3:g.179218303G>A
 python3 BEstimate.py -gene PIK3CA -assembly GRCh38 -pamseq NGN -pamwin 21-23 -actwin 4-8 -protolen 20 -mutation_file PIK3CA_mutation_file.txt -edit A -edit_to G -vep -ofile PIK3CA_NGN_ABE_mE545K -o ../output/
 ```
 
+### Off-Targets
+
 To run the off target analysis, first you need to have the [Ensembl](https://www.ensembl.org/) Genome indexed for the interested PAM sequence. 
-The `x_genome.py` script will download the required files and index the genome.
+
+The `x_genome.py` script will download the required files and index the genome for CRISPRs as follows.
+- download the specified FASTA genome assembly files from the Ensembl project,
+- gather CRISPRs from the FASTA files into CSV files detailing chromasome, position in chromosome as well as PAM position,
+- generate a binary list of gRNA signatures (accounting for PAM position),
+- insert the CRISPRs into a SQLite database - for cross referencing the gRNAs found in the binary list.
 
 to run the **x_genome.py** script:
 
-```bash
-python3 x_genome.py -pamseq <PAM sequence> -assembly <genome assembly> -o <output directory> -v_ensembl <assembly version> -ot_path <off-targets path>
-```
-
 The parameters are:
-- *-pamseq* - the PAM sequence that will be used for indexing CRISPRs e.g. "NGG" - *Required*,
-- *-assembly* - the human reference genome targeted, "GRCh37" or "GRCh38" - *Required*,
-- *-o* - the output directory, if not specified will use the current directory - *Optional*,
-- *-v_ensembl* - the Ensembl version of the genome being indexed (currently default is 113 for GRCh38, if using GRCh37 the please use <=75) - *Required*,
-- *-ot_path* - path for the downloaded genome for the off-target analysis, defaults to "../offtargets" - *Optional*
+- *-p --pamseq* - the PAM sequence that will be used for indexing CRISPRs e.g. "NGG" - *Required*,
+- *-a --assembly* - the human reference genome targeted, "GRCh37" or "GRCh38" - *Required*,
+- *-o --output_path* - the output directory, if not specified will use the current directory - *Optional*,
+- *-e --ensembl_version* - the Ensembl version of the genome being indexed (currently default is 113 for GRCh38, if using GRCh37 the please use <=75) - *Required*,
+- *-ot --offtargets_path* - path for the downloaded genome for the off-target analysis, defaults to "../offtargets" - *Optional*
 
 for example:
 
 ```bash
-python3 x_genome.py -pamseq NGN -assembly GRCh38 -v_ensembl 113 -ot_path ../
+python3 x_genome.py --pamseq NGN --assembly GRCh38 --ensembl_version 113 --offtargets_path ../
 ```
+
+The gathering of CRISPRs from the genome assembly takes a while and requires a fair amount of disk storage. For example using the GRCh38 genome assembly:
+
+| Pam Sequence | Space (GB) | Run Time  |
+| ------------ | ---------- | --------- |
+| NGG          | 38         | ~3 Hours  |
+| NGN          | 140        | ~9 Hours  |
 
 Then, you can run the off target analysis, see below for *BRAF* gene:
 
 ```bash
-python3 BEstimate.py -gene BRAF -assembly GRCh38 -pamseq NGN -edit A -edit_to G -vep -ot -o ../output/ -ofile BRAF_ABE_NGN`
+python3 BEstimate.py -gene BRAF -assembly GRCh38 -pamseq NGN -edit A -edit_to G -vep -ot -o ../output -ot_path ../offtargets -ofile BRAF_ABE_NGN
 ```
 
 ## Contact

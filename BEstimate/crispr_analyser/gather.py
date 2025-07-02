@@ -38,7 +38,7 @@ def match_pam(
     return True
 
 
-def gather(inputfile: str, outputfile: str, pam: str, verbose: bool = False):
+def gather(inputfile: str, outputfile: str, pam: str, sequence_start: int = 0, verbose: bool = False) -> int:
     """Run the CRISPR gatherer.
 
     Args:
@@ -82,8 +82,9 @@ def gather(inputfile: str, outputfile: str, pam: str, verbose: bool = False):
                             pam_sequence=reverse_complement(pam),
                             pam_on_right=False,
                         ):
+                            sequence_start += 1
                             csvwriter.writerow(
-                                [chromosome, position, "".join(buffer), 0, 1]
+                                [sequence_start, chromosome, position, "".join(buffer), 0]
                             )
                             crispr_count += 1
                         if match_pam(
@@ -91,13 +92,15 @@ def gather(inputfile: str, outputfile: str, pam: str, verbose: bool = False):
                             pam_sequence=pam,
                             pam_on_right=True,
                         ):
+                            sequence_start += 1
                             csvwriter.writerow(
-                                [chromosome, position, "".join(buffer), 1, 1]
+                                [sequence_start, chromosome, position, "".join(buffer), 1]
                             )
                             crispr_count += 1
     if verbose:
         end = time.time()
         print(f"Gathered {crispr_count} CRISPRs in {end - start} seconds.")
+    return sequence_start
 
 
 def run(argv=sys.argv[1:]):

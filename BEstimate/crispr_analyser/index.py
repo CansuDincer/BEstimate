@@ -61,8 +61,8 @@ def parse_record(record: str, guide_length: int, pam_length: int) -> (str, int):
     if len(records) != 5:
         print(f"Record '{record}' contains {len(records)} columns, expected 5")
         sys.exit(2)
-    pam_right = int(records[3])
-    crispr_sequence = records[2]
+    pam_right = int(records[4])
+    crispr_sequence = records[3]
     if len(crispr_sequence) != guide_length + pam_length:
         print(
             f"Record {record} has sequence_length {len(crispr_sequence)}, "
