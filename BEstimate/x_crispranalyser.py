@@ -9,6 +9,7 @@
 import argparse
 import csv
 import numpy as np
+import os.path
 import sqlite3
 import time
 from crispr_analyser import search, align, utils
@@ -123,6 +124,12 @@ def get_off_targets(
 ) -> bool:
     """Generate off-target summaries and details files for a given input
     and binary guides file"""
+    if not os.path.isfile(binary_index_file):
+        raise FileNotFoundError(f"binary index file {binary_index_file} is not found")
+    if not os.path.isfile(input_csv_file):
+        raise FileNotFoundError(f"input CSV file {input_csv_file} is not found")
+    if not os.path.isfile(db_file):
+        raise FileNotFoundError(f"database file {db_file} is not found")
     start = time.time()
     with open(binary_index_file, "rb") as guides_file:
         # check that the binary guides file is valid
