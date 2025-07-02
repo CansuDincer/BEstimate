@@ -2805,7 +2805,7 @@ Off target analysis: %s"""
 				if summary_df is not None and len(summary_df.index) != 0:
 					print("Summary Data Frame was created!")
 					summary_df.to_csv(path + args["OUTPUT_FILE"] + "_summary_df.csv", index=False)
-					final_df = summary_df.copy()
+					final_df = "_summary_df.csv"
 					print("Summary Data Frame was written in %s as %s\n\n" % (
 						path, args["OUTPUT_FILE"] + "_summary_df.csv"))
 				else:
