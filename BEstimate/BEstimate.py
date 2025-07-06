@@ -2584,10 +2584,12 @@ def run_offtargets(genome: str, file_name: str, final_df: str) -> bool:
 	"""
 	print(f"Summary Data Frame was read from {file_name}{final_df}\n")
 
+	file_prefix = genome.replace(".dna.chromosome", "")
 	has_off_targets = x_crispranalyser.get_off_targets(
 		input_csv_file=f"{path}{file_name}{final_df}",
-		input_bin_file=f"{ot_path}/genome/{genome}.bin",
-		output_csv_file_base=f"{ot_path}/wge_files/{file_name}",
+		binary_index_file=f"{ot_path}grna_bin/{file_prefix}.bin",
+		output_csv_file_base=f"{ot_path}output/{file_name}",
+        db_file=f"{ot_path}crispr_db/{file_prefix}.db",
 		)
 
 	if has_off_targets:
@@ -2648,6 +2650,7 @@ Off target analysis: %s"""
 			 ", ".join("" if mutations is None else mutations), ot_analysis))
 
 	print("""\n
+
 -------------------------------------------------------------- 
 		Ensembl Gene Information
 -------------------------------------------------------------- 
@@ -2680,6 +2683,11 @@ Off target analysis: %s"""
 		path = args["OUTPUT_PATH"]
 	else:
 		path = args["OUTPUT_PATH"] + "/"
+	try:
+		os.mkdir(path)
+	except FileExistsError:
+		pass
+
 
 	file_name = args["OUTPUT_FILE"] + "_edit_df.csv"
 
@@ -2826,26 +2834,16 @@ Off target analysis: %s"""
 			pass
 
 		try:
-			os.mkdir(os.getcwd() + "/../offtargets/wge_files/")
+			os.mkdir(os.getcwd() + "/../offtargets/output/")
 
 		except FileExistsError:
 			pass
-
 		if args["ASSEMBLY"] == "GRCh37":
-			file_main_text = "Homo_sapiens.GRCh37.%s.dna.chromosome" % args["VERSION"]
+			file_main_text = "Homo_sapiens.GRCh37.%s.%s" % (args["VERSION"], args["PAMSEQ"])
 		elif args["ASSEMBLY"] == "GRCh38":
-			file_main_text = "Homo_sapiens.GRCh38.dna.chromosome"
-
-		if "%s.bin" % file_main_text in os.listdir("%sgenome/" % ot_path):
+			file_main_text = "Homo_sapiens.GRCh38.%s" % args["PAMSEQ"]
+		if "%s.bin" % file_main_text in os.listdir("%sgrna_bin/" % ot_path):
 			_ = run_offtargets(genome=file_main_text, file_name=args["OUTPUT_FILE"], final_df=final_df)
-
-			while args["OUTPUT_FILE"] + "_ot_annotated_df.csv" in os.listdir(path):
-				time.sleep(20)
-
-			if args["OUTPUT_FILE"] + "_ot_annotated_df.csv" in os.listdir(path):
-				return True
-			else:
-				print("Off target information cannot be added.")
 		else:
 			print("Please download and index your genome file\nRun x_genome.py first.")
 
