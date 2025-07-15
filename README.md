@@ -16,17 +16,17 @@ If not, you should have python 3.13 and you can use requirements file:
 ## Run BEstimate
 
 ```bash
-python3 BEstimate.py -gene BRCA1 -assembly GRCh38 -pamseq NGG -pamwin 21-23 -actwin 4-8 -protolen 20 -edit C -edit_to T -o ../output/ -ofile BRCA1_CBE_NGG
+python3 BEstimate.py -gene SRY -assembly GRCh38 -pamseq NGG -pamwin 21-23 -actwin 4-8 -protolen 20 -edit C -edit_to T -o ../output/ -ofile SRY_CBE_NGG
 ```
 
 The user also run the same analysis for different PAM only changing -pamseq NGN. 
 
-*Warning: Be careful to write the PAM sequence to be in concordant with the length of the -pamwin. Here, NGN is in concordant with 21-23 (3 nucleotides). Otherwise, the user need to write NG -pamseq with 21-22 -pamwin.* 
+*Warning: Be careful to write the PAM sequence to be in concordance with the length of the -pamwin. Here, NGN is in concordance with 21-23 (3 nucleotides). Otherwise, the user need to write NG -pamseq with 21-22 -pamwin.* 
 
 If you would like to run for a specific transcript and run the protein analysis:
 
 ```bash
-python3 BEstimate.py -gene BRAF -assembly GRCh38 -transcript ENST00000646891 -edit C -edit_to T -vep -o ../output/ -ofile BRAF_CBE_NGG
+python3 BEstimate.py -gene SRY -assembly GRCh38 -transcript ENST00000383070 -edit C -edit_to T -vep -o ../output/ -ofile SRY_CBE_NGG
 ```
 
 If you would like to run with a specific point mutation, with NGN PAM and with VEP and protein analysis:
@@ -38,37 +38,37 @@ python3 BEstimate.py -gene PIK3CA -assembly GRCh38 -pamseq NGN -pamwin 21-23 -ac
 
 ### Off-Targets
 
-To run the off target analysis, first you need to have the [Ensembl](https://www.ensembl.org/) Genome indexed for the interested PAM sequence. 
+To run the off-target analysis, first you need to have the [Ensembl](https://www.ensembl.org/) Genome indexed for the interested PAM sequence. 
 
 The `x_genome.py` script will download the required files and index the genome for CRISPRs as follows.
-- download the specified FASTA genome assembly files from the Ensembl project,
-- gather CRISPRs from the FASTA files into CSV files detailing chromasome, position in chromosome as well as PAM position,
-- generate a binary list of gRNA signatures (accounting for PAM position),
-- insert the CRISPRs into a SQLite database - for cross referencing the gRNAs found in the binary list.
+- Download the specified FASTA genome assembly files from the Ensembl project,
+- Gather CRISPRs from the FASTA files into CSV files detailing chromosome, position in chromosome, as well as PAM position,
+- Generate a binary list of gRNA signatures (accounting for PAM position),
+- Insert the CRISPRs into a SQLite database for cross-referencing the gRNAs found in the binary list.
 
 to run the **x_genome.py** script:
 
 The parameters are:
-- *-p --pamseq* - the PAM sequence that will be used for indexing CRISPRs e.g. "NGG" - *Required*,
+- *-p --pamseq* - the PAM sequence that will be used for indexing CRISPRs, e.g. "NGG" - *Required*,
 - *-a --assembly* - the human reference genome targeted, "GRCh37" or "GRCh38" - *Required*,
-- *-o --output_path* - the output directory, if not specified will use the current directory - *Optional*,
-- *-e --ensembl_version* - the Ensembl version of the genome being indexed (currently default is 113 for GRCh38, if using GRCh37 the please use <=75) - *Required*,
+- *-o --output_path* - the output directory, if not specified, will use the current directory - *Optional*,
+- *-e --ensembl_version* - the Ensembl version of the genome being indexed (currently default is 113 for GRCh38, if using GRCh37, please use <=75) - *Required*,
 - *-ot --offtargets_path* - path for the downloaded genome for the off-target analysis, defaults to "../offtargets" - *Optional*
 
-for example:
+For example:
 
 ```bash
-python3 x_genome.py --pamseq NGN --assembly GRCh38 --ensembl_version 113 --offtargets_path ../
+python3 x_genome.py --pamseq NGN --assembly GRCh38 --ensembl_version 113
 ```
 
-The gathering of CRISPRs from the genome assembly takes a while and requires a fair amount of disk storage. For example using the GRCh38 genome assembly:
+The gathering of CRISPRs from the genome assembly takes a while and requires a fair amount of disk storage. For example, using the GRCh38 genome assembly:
 
 | Pam Sequence | Space (GB) | Run Time  |
 | ------------ | ---------- | --------- |
 | NGG          | 38         | ~3 Hours  |
 | NGN          | 140        | ~9 Hours  |
 
-Then, you can run the off target analysis, see below for *BRAF* gene:
+Then, you can run the off-target analysis, see below for the *BRAF* gene:
 
 ```bash
 python3 BEstimate.py -gene BRAF -assembly GRCh38 -pamseq NGN -edit A -edit_to G -vep -ot -o ../output -ot_path ../offtargets -ofile BRAF_ABE_NGN
@@ -78,7 +78,7 @@ python3 BEstimate.py -gene BRAF -assembly GRCh38 -pamseq NGN -edit A -edit_to G 
 
 BEstimate is the product of Cansu Dinçer, Matthew Coelho and Mathew Garnett from Garnett Group at the Wellcome Sanger Institute. Off-target analysis has been adapted by Bo Fussing from the Cellular Informatics team within the Wellcome Sanger Institute.
 
-For any problems or feedback on BEstimate, you can contact [here](mailto:cd7@sanger.ac.uk).
+If you have any problems or feedback regarding BEstimate, please contact [here](mailto:cd7@sanger.ac.uk).
 
 ## License
 
