@@ -1817,7 +1817,7 @@ def retrieve_vep_info(hgvs_df, ensembl_object, uniprot, transcript_id=None):
 			except json.decoder.JSONDecodeError:
 				print("No retrieval for %s" % hgvs)
 
-	hgvs_list = list(hgvs_index.loc[x + 200: x + 200 + r]["HGVS"].values)
+	hgvs_list = list(hgvs_index.loc[(200 * (t-1)) + 200: (200 * (t-1)) + 200 + r]["HGVS"].values)
 	hgvs_json = json.dumps(hgvs_list)
 
 	check_point = 0
