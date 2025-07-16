@@ -9,7 +9,7 @@
 
 # Import necessary packages
 import os, sys, pandas, re, argparse, requests, json, itertools, pickle, time, numpy, gzip
-import x_crispranalyser
+from import x_crispranalyser
 from Bio import SeqIO
 from Bio import pairwise2
 from Bio.pairwise2 import format_alignment
@@ -2588,7 +2588,7 @@ def run_offtargets(genome: str, file_name: str, final_df: str) -> bool:
 	has_off_targets = x_crispranalyser.get_off_targets(
 		input_csv_file=f"{path}{file_name}{final_df}",
 		binary_index_file=f"{ot_path}grna_bin/{file_prefix}.bin",
-		output_csv_file_base=f"{ot_path}output/{file_name}",
+		output_csv_file_base=f"{path}{file_name}",
         db_file=f"{ot_path}crispr_db/{file_prefix}.db",
 		)
 
