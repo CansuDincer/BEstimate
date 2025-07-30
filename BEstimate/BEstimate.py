@@ -9,7 +9,7 @@
 
 # Import necessary packages
 import os, sys, pandas, re, argparse, requests, json, itertools, pickle, time, numpy, gzip
-import x_crispranalyser
+from BEstimate import x_crispranalyser
 from Bio import SeqIO
 from Bio import pairwise2
 from Bio.pairwise2 import format_alignment
