@@ -6,9 +6,9 @@ BEstimate, a Python module that systematically identifies guide RNA (gRNA) targe
 - [Quick start installation](#quick-start-installation)
 - [Run BEstimate](#run-bestimate)
     - [Examples with BEstimate](#examples-with-bestimate)
-    - [Off-Target Analysis](#off-target-analysis)
+    - [Off-Targets Analysis](#off-targets-analysis)
     - [Command line usage and options](#command-line-usage-and-options)
-    - [Output Interpretation](#output-interpreptation)
+    - [Output Interpretation](#output-interpretation)
 - [Contact](#contact)
 - [License](#license)
 
@@ -53,7 +53,7 @@ BEstimate -gene PIK3CA -assembly GRCh38 -pamseq NGN -pamwin 21-23 -actwin 4-8 -p
 ```
 
 
-### Off-Targets
+### Off-Targets Analysis
 
 To run the off-target analysis, first you need to have the [Ensembl](https://www.ensembl.org/) Genome indexed for the interested PAM sequence. 
 
@@ -333,7 +333,7 @@ additional columns:
 - scored_df: If `-rs3` or `-fc` provided, an edit/protein_df/ot_annotated_df file with on-target scoring for each gRNA
 
 <details>
-<summary>Expand to see <strong>ot_annotated_df</strong> column interpretation</summary>
+<summary>Expand to see <strong>scored_df</strong> column interpretation</summary>
 
 ```
 additional columns:
