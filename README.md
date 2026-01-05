@@ -1,6 +1,6 @@
 # BEstimate
 
-BEstimate, a Python module that systematically identifies guide RNA (gRNA) targetable sites across given sequences for given Base Editors, functional and clinical effects of the potential edits on the resulting proteins and off target consequence of the found sequences. It has the ability to provide in silico analysis of the sequences to identify positions that can be editable by Base Editors, and their features before starting experiments. 
+BEstimate, a Python module that systematically identifies guide RNA (gRNA) targetable sites across given sequences for given Base Editors, functional and clinical effects of the potential edits on the resulting proteins, on-target scores and off target consequence of the found sequences. It has the ability to provide *in silico* analysis of the sequences to identify positions that can be editable by Base Editors, and their features before starting experiments. 
 
 ## Table of Contents
 - [Quick start installation](#quick-start-installation)
@@ -16,6 +16,7 @@ BEstimate, a Python module that systematically identifies guide RNA (gRNA) targe
 
 You can directly use BEstimate environment if you have conda. Please follow below:
 
+
 - `git clone https://github.com/CansuDincer/BEstimate.git`
 - `cd BEstimate`
 - `conda-env create -n bestimate -f=bestimate.yml`
@@ -24,6 +25,11 @@ You can directly use BEstimate environment if you have conda. Please follow belo
 If not, you should have python 3.13 and you can use requirements file:
 
 - `pip3 install -r requirements.txt`
+
+To run on-target scoring, you need to use different environment. 
+To use that please follow below:
+- `conda-env create -n bestimate_ontarget -f=bestimate_ontarget.yml`
+- `conda activate bestimate_ontarget`
 
 ## Run BEstimate
 
@@ -45,6 +51,15 @@ If you would like to run for a specific transcript and run the protein analysis:
 BEstimate -gene SRY -assembly GRCh38 -transcript ENST00000383070 -edit C -edit_to T -vep -o ../output/ -ofile SRY_CBE_NGG
 ```
 
+If you would like to add on-target scoring, Please be careful, after running BEstimate analysis, 
+you need to deactivate bestimate environment and activate bestimate_ontarget environment to run below:
+
+*Warning: Here we ran `-vep` option, therefore the file we'd like to run for on-target will be summary_df.csv.
+Otherwise, edit_df can be used as well.*
+```bash
+x_ontarget -iname 'summary_df' -edit C -o ../output/ -ofile SRY_CBE_NGG -rs3 -fc 
+```
+
 If you would like to run with a specific point mutation, with NGN PAM and with VEP and protein analysis:
 Prepare a `PIK3CA_mutation_file.txt` for example with 3:g.179218303G>A
 
@@ -52,6 +67,11 @@ Prepare a `PIK3CA_mutation_file.txt` for example with 3:g.179218303G>A
 BEstimate -gene PIK3CA -assembly GRCh38 -pamseq NGN -pamwin 21-23 -actwin 4-8 -protolen 20 -mutation_file PIK3CA_mutation_file.txt -edit A -edit_to G -vep -ofile PIK3CA_NGN_ABE_mE545K -o ../output/
 ```
 
+If you have your own library for *MYC* gene, you can add the csv file (library.csv) to use BEstimate annotation as follow:
+
+```bash
+BEstimate -gene MYC -assembly GRCh38 -pamseq NGN -pamwin 21-23 -actwin 3-9 -protolen 20 -library_file library.csv -edit A -edit_to G -vep -ofile annotated_library -o ../output/
+```
 
 ### Off-Targets Analysis
 
@@ -85,10 +105,10 @@ The gathering of CRISPRs from the genome assembly takes a while and requires a f
 | NGG          | 38         | ~3 Hours  |
 | NGN          | 140        | ~9 Hours  |
 
-Then, you can run the off-target analysis, see below for the *BRAF* gene:
+Then, you can run the off-target analysis, see below for the *SRY* gene:
 
 ```bash
-python3 BEstimate.py -gene BRAF -assembly GRCh38 -pamseq NGN -edit A -edit_to G -vep -ot -o ../output -ot_path ../offtargets -ofile BRAF_ABE_NGN
+python3 BEstimate.py -gene SRY -assembly GRCh38 -pamseq NGN -edit A -edit_to G -vep -ot -o ../output -ot_path ../offtargets -ofile SRY_ABE_NGN
 ```
 
 ### Command line usage and options
@@ -97,11 +117,12 @@ There are three programs when the package is installed available from the comman
 - `BEstimate` - the main program to find and analyse Base Editor sites
 - `x_genome` - the program to download and index a genome for off-target analysis
 - `x_crispranalyser` - the program to run off-target analysis on guides
+- `x_ontarget` - the program to add on-target scores
 
 <details>
 <summary>Expand to see <strong>BEstimate</strong> command line options</summary>
 
-```bash
+```
 BEstimate --help
 usage: BEstimate [inputs]
 
@@ -130,8 +151,6 @@ Mandatory Inputs:
   -flank                The boolean option if the user wants to add flanking sequences of the gRNAs
   -flank3 FLAN_3        The number of nucleotides in the 3' flanking region
   -flank5 FLAN_5        The number of nucleotides in the 5' flanking region
-  -rs3 RS3              The boolean option if the user wants to add on target RuleSet3 scoring for the gRNAs
-  -fc FCAST             The boolean option if the user wants to add on target ForeCast gRNAs efficiency info
   -edit {A,T,G,C}       The nucleotide which will be edited.
   -edit_to {A,T,G,C}    The nucleotide after edition.
   -o OUTPUT_PATH        The path for output. If not specified the current directory will be used!
@@ -146,7 +165,7 @@ Mandatory Inputs:
 <details>
 <summary>Expand to see <strong>x_genome</strong> command line options</summary>
 
-```bash
+```
 usage: x_genome [inputs]
 
 Script for indexing CRISPRs for finding off-targets
@@ -171,7 +190,7 @@ options:
 <details>
 <summary>Expand to see <strong>x_crispranalyser</strong> command line options</summary>
 
-```bash
+```
 usage: x_crispranalyser [inputs]
 
 Script for finding off-targets
@@ -188,13 +207,33 @@ options:
   --db_file DB_FILE, -d DB_FILE
                         The CRISPR DB file generated by x_genome.py
 ```
-
 </details>
+
+
+<details>
+<summary>Expand to see <strong>x_ontarget</strong> command line options</summary>
+
+```
+usage: x_ontarget [inputs]
+
+Script for predicting on-target scores
+
+options:
+  -rs3 RS3, The boolean option if the user wants to add on target RuleSet3 scoring for the gRNAs
+  -fc FCAST,  The boolean option if the user wants to add on target ForeCast gRNAs efficiency info
+  -edit EDIT,  The searched nuceleotide
+  -iname INPUT,  The input BEstimate file extension (edit_df/ summary_df/ ot_annotated_df)
+  -ofile OUTPUT_FILE, The output file name
+  -o OUTPUT_PATH,   The path for output. If not specified the current directory will be used!")
+```
+</details>
+
 
 ### Output Interpretation
 
 BEstimate produces several files for different purposes:
 - crispr_df: All gRNAs with and without editable sites 
+
 <details>
 <summary>Expand to see <strong>crispr_df</strong> column interpretation</summary>
 
@@ -376,5 +415,5 @@ For policies regarding the underlying data, please also refer to:
 - [Ensembl terms and conditions](https://www.ensembl.org/info/about/legal/code_licence.html#:~:text=Subject%20to%20the%20terms%20and,the%20Work%20and%20such%20Derivative)
 - [Uniprot terms and conditions](https://www.uniprot.org/help/license#:~:text=We%20make%20no%20warranties%20regarding,by%20patents%20or%20other%20rights.)
 - [Interactome Insider terms and conditions](http://interactomeinsider.yulab.org/)
-- [Rule Set 3](https://gpp-rnd.github.io/rs3/)
-- [FORECasT-BE](https://gpp-rnd.github.io/rs3/)
+- [Rule Set 3 terms and conditions](https://gpp-rnd.github.io/rs3/)
+- [FORECasT-BE terms and conditions](https://gpp-rnd.github.io/rs3/)

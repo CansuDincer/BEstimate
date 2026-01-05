@@ -27,8 +27,8 @@ def take_input():
 	parser.add_argument("-fc", dest="FCAST", action="store_true",
 						help="The boolean option if the user wants to add on target ForeCast gRNAs efficiency info")
 	parser.add_argument("-edit", dest="EDIT", help="The searched nuceleotide", required=True)
-	parser.add_argument("-obj", dest="OBJ", help="The ensembl object", required=True)
-	parser.add_argument("-iname", dest="INPUT", help="The input CSV file to be analysed", required=True)
+	parser.add_argument("-iname", dest="INPUT", help="The input BEstimate file extension (edit_df/ summary_df/ ot_annotated_df)",
+						required=True)
 	parser.add_argument("-ofile", dest="OUTPUT_FILE", default="output",
 						help="The output file name, if not specified \"position\" will be used!")
 	parser.add_argument("-o", dest="OUTPUT_PATH", default=os.getcwd() + "/",
@@ -117,6 +117,7 @@ def main():
 					\n""")
 
 		df = pandas.read_csv(f"{path}{args['OUTPUT_FILE']}_{args["OUTPUT"]}.csv")
+		ensembl_obj = numpy.load(f"{path}{args["OUTPUT_FILE"]}_ensembl_obj.npy")
 
 		if f"{args['OUTPUT_FILE']}_scored_{args["OUTPUT"]}.csv" not in os.listdir(path):
 			if rs3_score:
@@ -125,7 +126,7 @@ def main():
 				else:
 					location_col = "Location"
 
-				rs3_score_df = run_ruleset3(final_df=df, location_col=location_col, ensembl_object=args["OBJ"])
+				rs3_score_df = run_ruleset3(final_df=df, location_col=location_col, ensembl_object=ensembl_obj)
 				df = rs3_score_df.copy()
 				print("RuleSet3 on target scoring was added!")
 

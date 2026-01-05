@@ -8,7 +8,7 @@
 # -----------------------------------------------------------------------------------------#
 
 # Import necessary packages
-import os, sys, pandas, re, argparse, requests, json
+import os, sys, numpy, pandas, re, argparse, requests, json
 import x_crispranalyser
 from Bio import SeqIO
 from Bio import pairwise2
@@ -2720,6 +2720,8 @@ Off target analysis: %s\nAre there existing library file: %s"""
 		ensembl_obj.extract_info(chromosome=ensembl_obj.chromosome,
 								 loc_start=ensembl_obj.gene_range[1],
 								 loc_end=ensembl_obj.gene_range[0], transcript=transcript)
+
+	numpy.save(f"{path}{args["OUTPUT_FILE"]}_ensembl_obj.npy", ensembl_obj)
 
 	print("""\n
 --------------------------------------------------------------
