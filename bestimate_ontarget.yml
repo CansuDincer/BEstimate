@@ -80,7 +80,6 @@ dependencies:
   - zstd=1.5.7=hb78ec9c_6
   - pip:
       - argparse==1.4.0
-      - forecast-be==0.2
       - getopts==1.0.5
       - lightgbm==3.3.5
       - llvmlite==0.46.0

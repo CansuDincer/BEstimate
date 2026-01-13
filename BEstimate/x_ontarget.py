@@ -7,7 +7,7 @@
 #                                                                              #
 # -----------------------------------------------------------------------------#
 
-import argparse, os, requests
+import argparse, os, requests, sys, pandas
 from rs3.seq import predict_seq
 from BEstimate import Ensembl
 
@@ -21,23 +21,40 @@ import forecast_be
 # capture command line arguments
 
 def take_input():
+	parser = argparse.ArgumentParser(prog="BEstimate On-target Scoring",
+									 usage="%(prog)s [inputs]")
+
+	for group in parser._action_groups:
+		if group.title == "optional arguments":
+			group.title = "Inputs"
+		elif "positional arguments":
+			group.title = "Mandatory Inputs"
+
+	# BASIC INFORMATION
 	# gRNA on target scoring
+	parser.add_argument("-gene", dest="GENE", required=True,
+						help="The hugo symbol of the interested gene!")
+	parser.add_argument("-assembly", dest="ASSEMBLY", required=True, default="GRCh38",
+						help="The genome assembly that will be used!")
+	parser.add_argument("-mutation_file", dest="MUTATION_FILE", default=None, type=argparse.FileType('r'),
+						help="A file for the mutations on the interested gene that you need to integrate "
+							 "into guide and/or annotation analysis")
 	parser.add_argument("-rs3", dest="RULESET3", action="store_true",
 						help="The boolean option if the user wants to add on target RuleSet3 scoring for the gRNAs")
 	parser.add_argument("-fc", dest="FCAST", action="store_true",
 						help="The boolean option if the user wants to add on target ForeCast gRNAs efficiency info")
 	parser.add_argument("-edit", dest="EDIT", help="The searched nuceleotide", required=True)
-	parser.add_argument("-iname", dest="INPUT", help="The input BEstimate file extension (edit_df/ summary_df/ ot_annotated_df)",
+	parser.add_argument("-iname", dest="INPUT",
+						help="The input BEstimate file extension (edit_df/ summary_df/ ot_annotated_df)",
 						required=True)
-	parser.add_argument("-ofile", dest="OUTPUT_FILE", default="output",
+	parser.add_argument("-ofile", dest="OUTPUT_FILE", default="output", required=True,
 						help="The output file name, if not specified \"position\" will be used!")
-	parser.add_argument("-o", dest="OUTPUT_PATH", default=os.getcwd() + "/",
+	parser.add_argument("-o", dest="OUTPUT_PATH", default=os.getcwd() + "/", required=True,
 						help="The path for output. If not specified the current directory will be used!")
 	parsed_input = parser.parse_args()
 	input_dict = vars(parsed_input)
 
 	return input_dict
-
 
 
 def run_ruleset3(final_df, ensembl_object, location_col):
@@ -46,7 +63,7 @@ def run_ruleset3(final_df, ensembl_object, location_col):
 	"""
 
 	final_df["rs3_sequence"] = final_df.apply(lambda x: ensembl_object.prep_rs3_seq(
-			location=x[location_col], direction=x.Direction), axis=1)
+		location=x[location_col], direction=x.Direction), axis=1)
 
 	if len(final_df.rs3_sequence.unique()) == 1 and list(final_df.rs3_sequence.unique())[0] == None:
 		print("No ensembl response > No Rule Set 3 analysis, please rerun!")
@@ -84,9 +101,7 @@ def run_forecastbe(final_df, searched_nucleotide):
 	return final_df
 
 
-
 def main():
-
 	global args
 
 	path = ""
@@ -109,6 +124,13 @@ def main():
 	else:
 		fc_score = False
 
+	if args["MUTATION_FILE"]:
+		mutations = list()
+		for line in args["MUTATION_FILE"].readlines():
+			mutations.append(line.strip())
+	else:
+		mutations = None
+
 	if rs3_score or fc_score:
 		print("""\n
 --------------------------------------------------------------
@@ -116,10 +138,18 @@ def main():
 --------------------------------------------------------------
 					\n""")
 
-		df = pandas.read_csv(f"{path}{args['OUTPUT_FILE']}_{args["OUTPUT"]}.csv")
-		ensembl_obj = numpy.load(f"{path}{args["OUTPUT_FILE"]}_ensembl_obj.npy")
+		df = pandas.read_csv(f"{path}{args['OUTPUT_FILE']}_{args['INPUT']}.csv")
 
-		if f"{args['OUTPUT_FILE']}_scored_{args["OUTPUT"]}.csv" not in os.listdir(path):
+		# Create Ensembl object
+		ensembl_obj = Ensembl(hugo_symbol=args["GENE"], assembly=args["ASSEMBLY"])
+		ensembl_obj.extract_gene_id()
+
+		if ensembl_obj.gene_id == '': sys.exit("No corresponding Ensembl Gene ID could be found!")
+
+		ensembl_obj.extract_sequence(ensembl_obj.gene_id, mutations=mutations)
+
+
+		if f"{args['OUTPUT_FILE']}_scored_{args['INPUT']}.csv" not in os.listdir(path):
 			if rs3_score:
 				if final_text != "edit_df":
 					location_col = "CRISPR_PAM_Location"
@@ -135,20 +165,18 @@ def main():
 				print("FORECast-BE gRNA efficiency was added!")
 				df = fc_score_df.copy()
 
-			df.to_csv(f"{path}{args['OUTPUT_FILE']}_scored_{args["OUTPUT"]}.csv", index=False)
+			df.to_csv(f"{path}{args['OUTPUT_FILE']}_scored_{args['INPUT']}.csv", index=False)
 			print("On-target annotation was completed!")
 			final_df = df.copy()
 		else:
-			df = pandas.read_csv(f"{path}{args['OUTPUT_FILE']}_scored_{args["OUTPUT"]}.csv")
+			df = pandas.read_csv(f"{path}{args['OUTPUT_FILE']}_scored_{args['INPUT']}.csv")
 			print("On target annotation was read!")
 			final_df = df.copy()
 
 	return final_df
 
 
-
 if __name__ == '__main__':
-
 	# -----------------------------------------------------------------------------------------#
 	# Retrieve input
 

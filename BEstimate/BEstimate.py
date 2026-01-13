@@ -9,13 +9,13 @@
 
 # Import necessary packages
 import os, sys, numpy, pandas, re, argparse, requests, json
-import x_crispranalyser
 from Bio import SeqIO
 from Bio import pairwise2
 from Bio.pairwise2 import format_alignment
 import warnings
 
 warnings.filterwarnings("ignore")
+
 
 # -----------------------------------------------------------------------------------------#
 # Take inputs
@@ -474,8 +474,8 @@ class Ensembl:
 
 		threep, fivep = 3, 4
 		grna_rs3_ensembl = (
-					self.server + "/sequence/region/human/%s:%s?expand_3prime=%s;expand_5prime=%s;content-type=text/plain" % (
-				location, grna_strand, threep, fivep))
+				self.server + "/sequence/region/human/%s:%s?expand_3prime=%s;expand_5prime=%s;content-type=text/plain" % (
+			location, grna_strand, threep, fivep))
 		grna_rs3_request = requests.get(grna_rs3_ensembl,
 										headers={"Content-Type": "text/plain"})
 
@@ -2688,7 +2688,6 @@ def main():
 	else:
 		lib_text = "No"
 
-
 	print("""
 The given arguments are:\nGene: %s\nAssembl: %s\nEnsembl transcript ID: %s\nUniprot ID: %s\nPAM sequence: %s\nPAM window: %s
 Protospacer length: %s\nActivity window: %s\nNucleotide change: %s>%s\nVEP and Uniprot analysis: %s\nMutation on genome: %s
@@ -2720,8 +2719,6 @@ Off target analysis: %s\nAre there existing library file: %s"""
 		ensembl_obj.extract_info(chromosome=ensembl_obj.chromosome,
 								 loc_start=ensembl_obj.gene_range[1],
 								 loc_end=ensembl_obj.gene_range[0], transcript=transcript)
-
-	numpy.save(f"{path}{args["OUTPUT_FILE"]}_ensembl_obj.npy", ensembl_obj)
 
 	print("""\n
 --------------------------------------------------------------
@@ -2763,11 +2760,11 @@ Off target analysis: %s\nAre there existing library file: %s"""
     \n""")
 	if args["OUTPUT_FILE"] + "_edit_df.csv" not in os.listdir(path):
 		final_df = find_editable_nucleotide(crispr_df=crispr_df, searched_nucleotide=args["EDIT"],
-										   activity_window=[int(args["ACTWINDOW"].split("-")[0]),
-															int(args["ACTWINDOW"].split("-")[1])],
-										   pam_window=[int(args["PAMWINDOW"].split("-")[0]),
-													   int(args["PAMWINDOW"].split("-")[1])],
-										   ensembl_object=ensembl_obj, mutations=mutations)
+											activity_window=[int(args["ACTWINDOW"].split("-")[0]),
+															 int(args["ACTWINDOW"].split("-")[1])],
+											pam_window=[int(args["PAMWINDOW"].split("-")[0]),
+														int(args["PAMWINDOW"].split("-")[1])],
+											ensembl_object=ensembl_obj, mutations=mutations)
 
 		if len(final_df.index) != 0: print("Edit Data Frame was created!")
 
@@ -2873,6 +2870,7 @@ Off target analysis: %s\nAre there existing library file: %s"""
 		Annotation - Off Target Annotation
 --------------------------------------------------------------
 				\n""")
+		import x_crispranalyser
 		try:
 			os.mkdir(os.getcwd() + "/../offtargets")
 		except FileExistsError:
@@ -2888,10 +2886,10 @@ Off target analysis: %s\nAre there existing library file: %s"""
 				print("Please download and index your genome file\nRun x_genome.py first.")
 		else:
 			final_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_ot_annotated_df.csv")
-			print("Off target annotated data Frame was read from %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_ot_annotated_df.csv"))
+			print("Off target annotated data Frame was read from %s as %s\n\n" % (path, args[
+				"OUTPUT_FILE"] + "_ot_annotated_df.csv"))
 
 	return final_df
-
 
 
 if __name__ == '__main__':

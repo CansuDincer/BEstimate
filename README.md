@@ -28,14 +28,30 @@ If not, you should have python 3.13 and you can use requirements file:
 
 To run on-target scoring, you need to use different environment. 
 To use that please follow below:
+
+**Be sure that you are in the BEstimate folder**
 - `conda-env create -n bestimate_ontarget -f=bestimate_ontarget.yml`
 - `conda activate bestimate_ontarget`
+
+To install FORECast-BE
+- `git clone https://github.com/ananth-pallaseni/FORECasT-BE.git`
+- `cd FORECasT-BE`
+- `pip install -e .`
 
 ## Run BEstimate
 
 ### Examples with BEstimate
 
-For example, if you would like to run for the *SRY* gene with NGG PAM sequence, with CBE (C to T editing) and without VEP and protein analysis:
+For example, if you would like to run for the *SRY* gene with NGG PAM sequence, 
+with CBE (C to T editing) and without VEP and protein analysis:
+
+**If not activated:**
+
+`conda activate bestimate`
+
+**If not in BEstimate directory:**
+
+`cd BEstimate`
 
 ```bash
 BEstimate -gene SRY -assembly GRCh38 -pamseq NGG -pamwin 21-23 -actwin 4-8 -protolen 20 -edit C -edit_to T -o ../output/ -ofile SRY_CBE_NGG
@@ -43,7 +59,7 @@ BEstimate -gene SRY -assembly GRCh38 -pamseq NGG -pamwin 21-23 -actwin 4-8 -prot
 
 The user also run the same analysis for different PAM only changing -pamseq NGN.
 
-*Warning: Be careful to write the PAM sequence to be in concordance with the length of the -pamwin. Here, NGN is in concordance with 21-23 (3 nucleotides). Otherwise, the user need to write NG -pamseq with 21-22 -pamwin.*
+*Be careful to write the PAM sequence to be in concordance with the length of the -pamwin. Here, NGN is in concordance with 21-23 (3 nucleotides). Otherwise, the user need to write NG -pamseq with 21-22 -pamwin.*
 
 If you would like to run for a specific transcript and run the protein analysis:
 
@@ -54,10 +70,16 @@ BEstimate -gene SRY -assembly GRCh38 -transcript ENST00000383070 -edit C -edit_t
 If you would like to add on-target scoring, Please be careful, after running BEstimate analysis, 
 you need to deactivate bestimate environment and activate bestimate_ontarget environment to run below:
 
+To deactivate bestimate:
+- `conda deactivate bestimate`
+
+To activate bestimate_ontarget:
+- `conda activate bestimate_ontarget`
+
 *Warning: Here we ran `-vep` option, therefore the file we'd like to run for on-target will be summary_df.csv.
 Otherwise, edit_df can be used as well.*
 ```bash
-x_ontarget -iname 'summary_df' -edit C -o ../output/ -ofile SRY_CBE_NGG -rs3 -fc 
+x_ontarget -gene SRY -assembly GRCh38 -iname 'summary_df' -edit C -o ../output/ -ofile SRY_CBE_NGG -rs3 -fc 
 ```
 
 If you would like to run with a specific point mutation, with NGN PAM and with VEP and protein analysis:
@@ -67,7 +89,13 @@ Prepare a `PIK3CA_mutation_file.txt` for example with 3:g.179218303G>A
 BEstimate -gene PIK3CA -assembly GRCh38 -pamseq NGN -pamwin 21-23 -actwin 4-8 -protolen 20 -mutation_file PIK3CA_mutation_file.txt -edit A -edit_to G -vep -ofile PIK3CA_NGN_ABE_mE545K -o ../output/
 ```
 
-If you have your own library for *MYC* gene, you can add the csv file (library.csv) to use BEstimate annotation as follow:
+To run on-target with mutations, you need to give mutation_file again:
+
+```bash
+x_ontarget -gene PIK3CA -assembly GRCh38 -mutation_file PIK3CA_mutation_file.txt -iname 'summary_df' -edit C -o ../output/ -ofile PIK3CA_NGN_ABE_mE545K -rs3 -fc 
+```
+
+If you have your own library for *MYC* gene, you can add the csv file (library.csv) to use BEstimate annotation as follows:
 
 ```bash
 BEstimate -gene MYC -assembly GRCh38 -pamseq NGN -pamwin 21-23 -actwin 3-9 -protolen 20 -library_file library.csv -edit A -edit_to G -vep -ofile annotated_library -o ../output/
@@ -219,6 +247,10 @@ usage: x_ontarget [inputs]
 Script for predicting on-target scores
 
 options:
+  -gene GENE            The hugo symbol of the interested gene!
+  -assembly ASSEMBLY    The genome assembly that will be used!
+  -mutation_file MUTATION_FILE
+                        A file for the mutations on the interested gene that you need to integrate into guide and/or annotation analysis
   -rs3 RS3, The boolean option if the user wants to add on target RuleSet3 scoring for the gRNAs
   -fc FCAST,  The boolean option if the user wants to add on target ForeCast gRNAs efficiency info
   -edit EDIT,  The searched nuceleotide
