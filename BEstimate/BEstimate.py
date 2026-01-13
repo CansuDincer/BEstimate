@@ -1600,11 +1600,6 @@ def extract_hgvs_df(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 						 "CRISPR_PAM_Sequence": grna_edit_df["CRISPR_PAM_Sequence"].values[0],
 						 "CRISPR_PAM_Location": grna_edit_df["Location"].values[0],
 						 "gRNA_Target_Sequence": grna,
-						 "gRNA_Target_Location": grna_edit_df["Location"].values[0].split(":")[0] + ":" +
-												 str(int(
-													 grna_edit_df["Location"].values[0].split(":")[1].split("-")[
-														 0]) - 3) + "-" +
-												 grna_edit_df["Location"].values[0].split(":")[1].split("-")[1],
 						 "Total_Edit": total_edit, "Edit_Location": edit_loc,
 						 "Direction": direction,
 						 "Transcript_ID": grna_edit_df["Transcript_ID"].values[0],
@@ -1640,10 +1635,6 @@ def extract_hgvs_df(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 						 "CRISPR_PAM_Sequence": grna_edit_df["CRISPR_PAM_Sequence"].values[0],
 						 "CRISPR_PAM_Location": grna_edit_df["Location"].values[0],
 						 "gRNA_Target_Sequence": grna,
-						 "gRNA_Target_Location": grna_edit_df["Location"].values[0].split(":")[0] + ":" +
-												 str(int(grna_edit_df["Location"].values[0].split(":")[1].split("-")[
-															 0]) - 3) + "-" +
-												 grna_edit_df["Location"].values[0].split(":")[1].split("-")[1],
 						 "Total_Edit": total_edit,
 						 "Edit_Location": position.split("_")[0] + "-" + position.split("_")[1],
 						 "Direction": direction,
@@ -1711,10 +1702,6 @@ def extract_hgvs_df(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 						 "CRISPR_PAM_Sequence": grna_edit_df["CRISPR_PAM_Sequence"].values[0],
 						 "CRISPR_PAM_Location": grna_edit_df["Location"].values[0],
 						 "gRNA_Target_Sequence": grna,
-						 "gRNA_Target_Location": grna_edit_df["Location"].values[0].split(":")[0] + ":" +
-												 grna_edit_df["Location"].values[0].split(":")[1].split("-")[0] + "-" + \
-												 str(int(grna_edit_df["Location"].values[0].split(":")[1].split("-")[
-															 1]) - 3),
 						 "Total_Edit": total_edit, "Edit_Location": edit_loc,
 						 "Direction": direction,
 						 "Transcript_ID": grna_edit_df["Transcript_ID"].values[0],
@@ -1750,10 +1737,6 @@ def extract_hgvs_df(edit_df, ensembl_object, transcript_id, edited_nucleotide,
 						 "CRISPR_PAM_Sequence": grna_edit_df["CRISPR_PAM_Sequence"].values[0],
 						 "CRISPR_PAM_Location": grna_edit_df["Location"].values[0],
 						 "gRNA_Target_Sequence": grna,
-						 "gRNA_Target_Location": grna_edit_df["Location"].values[0].split(":")[0] + ":" +
-												 grna_edit_df["Location"].values[0].split(":")[1].split("-")[0] + "-" + \
-												 str(int(grna_edit_df["Location"].values[0].split(":")[1].split("-")[
-															 1]) - 3),
 						 "Total_Edit": total_edit,
 						 "Edit_Location": position.split("_")[0] + "-" + position.split("_")[1],
 						 "Direction": direction,
@@ -2355,7 +2338,7 @@ def summarise_3di(list_of_partners):
 def summarise_guides(last_df):
 	summary_df = pandas.DataFrame(index=list(range(0, len(last_df.groupby(["CRISPR_PAM_Sequence"])))),
 								  columns=["Hugo_Symbol", "CRISPR_PAM_Sequence", "CRISPR_PAM_Location",
-										   "gRNA_Target_Sequence", "gRNA_Target_Location", "gRNA_flanking_sequences",
+										   "gRNA_Target_Sequence", "gRNA_flanking_sequences",
 										   "Edit_Location", "Direction", "Transcript_ID", "Exon_ID",
 										   "Protein_ID", "guide_in_CDS", "Edit_in_Exon", "Edit_in_CDS",
 										   "mutation_on_guide",
@@ -2398,10 +2381,6 @@ def summarise_guides(last_df):
 			[str(x) for x in list(guide_df.gRNA_flanking_sequences.unique()) if
 			 x is not None and pandas.isna(x) is False]
 			if pandas.isna(guide_df.gRNA_flanking_sequences.unique()) is False else "")
-
-		summary_df.loc[i, "gRNA_Target_Location"] = ";".join(
-			[str(x) for x in list(guide_df.gRNA_Target_Location.unique()) if x is not None and pandas.isna(x) is False]
-			if guide_df.gRNA_Target_Location.unique() is not None else "")
 
 		summary_df.loc[i, "Edit_Location"] = ";".join(
 			[str(x) for x in list(guide_df.Edit_Location.unique()) if x is not None and pandas.isna(x) is False]
