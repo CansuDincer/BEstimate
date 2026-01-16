@@ -96,7 +96,8 @@ x_ontarget -gene PIK3CA -assembly GRCh38 -mutation_file PIK3CA_mutation_file.txt
 ```
 
 If you have your own library for *MYC* gene, you can add the csv file (library.csv) to use BEstimate annotation as follows:
-
+*Warning: You have to have column names: CRISPR_PAM_Sequence (gRNA sequence with its PAM), 
+Direction (left or right- orientation of the gRNA) and Location (genomic location of the CRISPR_PAM_Sequence).*
 ```bash
 BEstimate -gene MYC -assembly GRCh38 -pamseq NGN -pamwin 21-23 -actwin 3-9 -protolen 20 -library_file library.csv -edit A -edit_to G -vep -ofile annotated_library -o ../output/
 ```
