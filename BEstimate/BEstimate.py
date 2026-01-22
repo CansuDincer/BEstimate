@@ -2752,7 +2752,8 @@ Off target analysis: %s\nAre there existing library file: %s"""
 		print("Edit Data Frame was written in %s as %s" % (path, args["OUTPUT_FILE"] + "_edit_df.csv\n"))
 	else:
 		print("Edit Data Frame was read from %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_edit_df.csv"))
-		final_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_edit_df.csv")
+		edit_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_edit_df.csv")
+		final_df = edit_df.copy()
 
 	if args["VEP"]:
 		print("""\n

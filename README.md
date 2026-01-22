@@ -21,18 +21,14 @@ You can directly use BEstimate environment if you have conda. Please follow belo
 
 - `git clone https://github.com/CansuDincer/BEstimate.git`
 - `cd BEstimate`
-- `conda-env create -n bestimate -f=bestimate.yml`
-- `conda activate bestimate`
-
-If not, you should have python 3.13 and you can use requirements file:
-
+- `conda create -n bestimate`
 - `pip3 install -r requirements.txt`
 
 To run on-target scoring, you need to use different environment. 
 To use that please follow below:
 
 **Be sure that you are in the BEstimate folder**
-- `conda-env create -n bestimate_ontarget -f=bestimate_ontarget.yml`
+- `conda env create -n bestimate_ontarget -f=bestimate_ontarget.yml`
 - `conda activate bestimate_ontarget`
 
 To install FORECast-BE
@@ -56,7 +52,7 @@ with CBE (C to T editing) and without VEP and protein analysis:
 `cd BEstimate`
 
 ```bash
-BEstimate -gene SRY -assembly GRCh38 -pamseq NGG -pamwin 21-23 -actwin 4-8 -protolen 20 -edit C -edit_to T -o ../output/ -ofile SRY_CBE_NGG
+python3 BEstimate.py -gene SRY -assembly GRCh38 -pamseq NGG -pamwin 21-23 -actwin 4-8 -protolen 20 -edit C -edit_to T -o ../output/ -ofile SRY_CBE_NGG
 ```
 
 The user also run the same analysis for different PAM only changing -pamseq NGN.
