@@ -2748,12 +2748,12 @@ Off target analysis: %s\nAre there existing library file: %s"""
 		if len(final_df.index) != 0: print("Edit Data Frame was created!")
 
 		final_df.to_csv(path + args["OUTPUT_FILE"] + "_edit_df.csv", index=False)
-
+		edit_df = final_df.copy()
 		print("Edit Data Frame was written in %s as %s" % (path, args["OUTPUT_FILE"] + "_edit_df.csv\n"))
 	else:
 		print("Edit Data Frame was read from %s as %s\n\n" % (path, args["OUTPUT_FILE"] + "_edit_df.csv"))
-		edit_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_edit_df.csv")
-		final_df = edit_df.copy()
+		final_df = pandas.read_csv(path + args["OUTPUT_FILE"] + "_edit_df.csv")
+		edit_df = final_df.copy()
 
 	if args["VEP"]:
 		print("""\n
