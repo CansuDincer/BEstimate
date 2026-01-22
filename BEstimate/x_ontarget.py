@@ -11,8 +11,8 @@ import argparse, os, requests, sys, pandas
 from rs3.seq import predict_seq
 from BEstimate import Ensembl
 
-if "/lustre/scratch125/casm/teams/team215/users/cd7/BEstimate/paper/FORECasT-BE/" not in sys.path:
-	sys.path.append("/lustre/scratch125/casm/teams/team215/users/cd7/BEstimate/paper/FORECasT-BE/")
+if f"{os.getcwd()}../FORECasT-BE/" not in sys.path:
+	sys.path.append("{os.getcwd()}../FORECasT-BE/")
 
 import forecast_be
 
