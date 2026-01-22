@@ -151,7 +151,7 @@ def main():
 
 		if f"{args['OUTPUT_FILE']}_scored_{args['INPUT']}.csv" not in os.listdir(path):
 			if rs3_score:
-				if final_text != "edit_df":
+				if args['INPUT'] != "edit_df":
 					location_col = "CRISPR_PAM_Location"
 				else:
 					location_col = "Location"
