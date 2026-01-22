@@ -3,7 +3,6 @@ biopython==1.86
 Brotli==1.2.0
 certifi==2025.11.12
 charset-normalizer==3.4.4
-forecast_be==0.2
 getopts==1.0.5
 h2==4.3.0
 hpack==4.1.0
