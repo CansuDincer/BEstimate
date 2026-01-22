@@ -38,6 +38,7 @@ To use that please follow below:
 To install FORECast-BE
 - `git clone https://github.com/ananth-pallaseni/FORECasT-BE.git`
 - `cd FORECasT-BE`
+*Please remove the version requirement of scikit-learn within setup.py in FORECast-BE folder.*
 - `pip3 install -e .`
 
 ## Run BEstimate
