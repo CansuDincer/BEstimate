@@ -1,8 +1,6 @@
 # BEstimate
 
-BEstimate, a Python module that systematically identifies guide RNA (gRNA) targetable sites across given sequences for given Base Editors, functional and clinical effects of the potential edits on the resulting proteins, on-target scores and off target consequence of the found sequences. It has the ability to provide *in silico* analysis of the sequences to identify positions that can be editable by Base Editors, and their features before starting experiments. 
-
-[![DOI](https://zenodo.org/badge/432206222.svg)](https://doi.org/10.5281/zenodo.18336622)
+BEstimate, a Python module that systematically identifies guide RNA (gRNA) targetable sites across given sequences for given Base Editors, functional and clinical effects of the potential edits on the resulting proteins, on-target scores and off target consequence of the found sequences. It has the ability to provide *in silico* analysis of the sequences to identify positions that can be editable by Base Editors, and their features before starting experiments.
 
 ## Table of Contents
 - [Quick start installation](#quick-start-installation)
@@ -21,20 +19,22 @@ You can directly use BEstimate environment if you have conda. Please follow belo
 
 - `git clone https://github.com/CansuDincer/BEstimate.git`
 - `cd BEstimate`
-- `conda create -n bestimate`
+- `conda create -n bestimate python==3.13`
+- `conda activate bestimate`
 - `pip3 install -r requirements.txt`
 
 To run on-target scoring, you need to use different environment. 
 To use that please follow below:
 
 **Be sure that you are in the BEstimate folder**
-- `conda env create -n bestimate_ontarget -f=bestimate_ontarget.yml`
+- `conda create -n bestimate_ontarget python==3.10`
 - `conda activate bestimate_ontarget`
+- `pip3 install -r requirements_ontarget.txt`
 
 To install FORECast-BE
 - `git clone https://github.com/ananth-pallaseni/FORECasT-BE.git`
 - `cd FORECasT-BE`
-- `pip install -e .`
+- `pip3 install -e .`
 
 ## Run BEstimate
 
@@ -62,7 +62,7 @@ The user also run the same analysis for different PAM only changing -pamseq NGN.
 If you would like to run for a specific transcript and run the protein analysis:
 
 ```bash
-BEstimate -gene SRY -assembly GRCh38 -transcript ENST00000383070 -edit C -edit_to T -vep -o ../output/ -ofile SRY_CBE_NGG
+python3 BEstimate.py -gene SRY -assembly GRCh38 -transcript ENST00000383070 -edit C -edit_to T -vep -o ../output/ -ofile SRY_CBE_NGG
 ```
 
 If you would like to add on-target scoring, Please be careful, after running BEstimate analysis, 
@@ -77,27 +77,27 @@ To activate bestimate_ontarget:
 *Warning: Here we ran `-vep` option, therefore the file we'd like to run for on-target will be summary_df.csv.
 Otherwise, edit_df can be used as well.*
 ```bash
-x_ontarget -gene SRY -assembly GRCh38 -iname 'summary_df' -edit C -o ../output/ -ofile SRY_CBE_NGG -rs3 -fc 
+python3 x_ontarget.py -gene SRY -assembly GRCh38 -iname 'summary_df' -edit C -o ../output/ -ofile SRY_CBE_NGG -rs3 -fc 
 ```
 
 If you would like to run with a specific point mutation, with NGN PAM and with VEP and protein analysis:
 Prepare a `PIK3CA_mutation_file.txt` for example with 3:g.179218303G>A
 
 ```bash
-BEstimate -gene PIK3CA -assembly GRCh38 -pamseq NGN -pamwin 21-23 -actwin 4-8 -protolen 20 -mutation_file PIK3CA_mutation_file.txt -edit A -edit_to G -vep -ofile PIK3CA_NGN_ABE_mE545K -o ../output/
+python3 BEstimate.py -gene PIK3CA -assembly GRCh38 -pamseq NGN -pamwin 21-23 -actwin 4-8 -protolen 20 -mutation_file PIK3CA_mutation_file.txt -edit A -edit_to G -vep -ofile PIK3CA_NGN_ABE_mE545K -o ../output/
 ```
 
 To run on-target with mutations, you need to give mutation_file again:
 
 ```bash
-x_ontarget -gene PIK3CA -assembly GRCh38 -mutation_file PIK3CA_mutation_file.txt -iname 'summary_df' -edit C -o ../output/ -ofile PIK3CA_NGN_ABE_mE545K -rs3 -fc 
+python3 x_ontarget.py -gene PIK3CA -assembly GRCh38 -mutation_file PIK3CA_mutation_file.txt -iname 'summary_df' -edit C -o ../output/ -ofile PIK3CA_NGN_ABE_mE545K -rs3 -fc 
 ```
 
 If you have your own library for *MYC* gene, you can add the csv file (library.csv) to use BEstimate annotation as follows:
 *Warning: You have to have column names: CRISPR_PAM_Sequence (gRNA sequence with its PAM), 
 Direction (left or right- orientation of the gRNA) and Location (genomic location of the CRISPR_PAM_Sequence).*
 ```bash
-BEstimate -gene MYC -assembly GRCh38 -pamseq NGN -pamwin 21-23 -actwin 3-9 -protolen 20 -library_file library.csv -edit A -edit_to G -vep -ofile annotated_library -o ../output/
+python3 BEstimate.py -gene MYC -assembly GRCh38 -pamseq NGN -pamwin 21-23 -actwin 3-9 -protolen 20 -library_file library.csv -edit A -edit_to G -vep -ofile annotated_library -o ../output/
 ```
 
 ### Off-Targets Analysis
