@@ -32,13 +32,16 @@ To use that please follow below:
 - `pip3 install -r requirements_ontarget.txt`
 
 *Warning for Mac users: you should remove rs3 from requirements and install lightgbm first*
+
 - `conda install -c conda-forge lightgbm==3.3.5`
 - `pip3 install rs3`
 
 To install FORECast-BE
 - `git clone https://github.com/ananth-pallaseni/FORECasT-BE.git`
 - `cd FORECasT-BE`
+
 *Please remove the version requirement of scikit-learn within setup.py in FORECast-BE folder.*
+
 - `pip3 install -e .`
 
 ## Run BEstimate
